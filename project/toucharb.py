@@ -101,7 +101,6 @@ class DemoNode(Node):
     # Receive feedback - called repeatedly by incoming messages.
     def recvfbk(self, fbkmsg):
         self.actpos = fbkmsg.position
-        # self.get_logger().info("actpos and type: %r, %r" % (self.actpos, type(self.actpos)))
         pass
 
 
@@ -144,13 +143,6 @@ class DemoNode(Node):
         tau_shoulder = self.A * sin(theta_sh) + self.B * cos(theta_sh) - 0.1
         return [0.0, tau_shoulder, 0.0]
     
-
-    def wraps(self, q):
-        # return (q - pi) * np.round(q / (pi))
-        self.get_logger().info("q, q[0], q[1], q[2]: %r, %r, %r, %r" % (q, q[0], q[1], q[2]))
-        return [q[0] % pi - pi, q[1] % pi - pi, q[2] % pi - pi]
-    
-    
     
     def newton_raphson(self, xgoal):
         xdistance = []
@@ -164,16 +156,10 @@ class DemoNode(Node):
             q = q + qdelta * 0.3
             xdistance.append(np.linalg.norm(xdelta))
             qstepsize.append(np.linalg.norm(qdelta))
-            
-            # self.get_logger().info("q: %r" % q)
 
             if np.linalg.norm(x-xgoal) < 1e-12:
                 self.get_logger().info("Completed in %d iterations" % i)
-                # q = self.wraps(q)
                 return q.tolist()
-            
-            # q = self.wraps(q)
-
         return WAITING_POS
 
 
@@ -193,31 +179,9 @@ class DemoNode(Node):
                 qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
 
                 self.set_mode(Mode.WAITING)
-                # self.set_mode(Mode.POINTING)
-                # self.set_pointcmd([0.27, 0.55, 0.02])
 
         elif self.mode is Mode.POINTING:
             if self.t - self.t_start < CYCLE:
-                # self.get_logger().info('Last Point and Point: %s, %s' % (self.lastpointcmd, self.pointcmd))
-                # (xD, vD) = goto5(self.t - self.t_start, CYCLE, np.array(self.lastpointcmd), self.pointcmd)
-                # qdlast = self.qD
-                # xDlast = self.xD
-
-                # (p, _, Jv, _) = self.chain.fkin(qdlast)
-
-                # J = Jv
-                # vr = vD + 20.0 * (xDlast - p)
-                # qddot = np.linalg.inv(J) @ vr
-
-                # qD = qdlast + 0.01 * qddot
-                
-                # self.qD = qD.flatten().tolist()
-                # self.xD = xD.flatten().tolist()
-                # qddot = qddot.flatten().tolist()
-                # qD = qD.flatten().tolist()
-
-                # self.qddot = qddot
-                # qd = qD
                 qd, qddot = self.super_smart_goto(self.t - self.t_start, WAITING_POS, self.qgoal, CYCLE)
                 self.qD = qd
                 self.qddot = qddot
