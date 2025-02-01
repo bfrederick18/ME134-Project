@@ -9,7 +9,7 @@ folders = ['launch', 'rviz', 'urdf', 'meshes']
 otherfiles = []
 for topfolder in folders:
     for folder in [topfolder] + \
-        [f for f in glob(topfolder+'/**/*', recursive=True) if isdir(f)]:
+        [f for f in glob(topfolder+'/*/', recursive=True) if isdir(f)]:
         # Grab the files in this folder and append to the mapping.
         files = [f for f in glob(folder+'/*') if not isdir(f)]
         otherfiles.append(('share/' + package_name + '/' + folder, files))
@@ -33,7 +33,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'wave = project.wave:main'
+            'wave = project.wave:main',
+            'toucharb = project.toucharb:main'
         ],
     },
 )
