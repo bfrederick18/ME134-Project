@@ -34,10 +34,17 @@ class DemoNode(Node):
         self.mode = Mode.START_UP
 
         self.position0 = self.grabfbk()
-        self.get_logger().info("Initial positions: %r" % self.position0)
+        # self.get_logger().info("Initial positions: %r" % self.position0)
 
         self.t = 0
         self.t_start = 0
+        (ptip, _, _, _) = self.chain.fkin(WAITING_POS)
+        self.x_waiting = ptip
+        self.qD = WAITING_POS
+        self.xD = ptip
+        self.qddot = None
+        self.lastpointcmd = self.x_waiting
+        self.pointcmd = self.x_waiting
 
         self.cmdmsg = JointState()
         self.cmdpub = self.create_publisher(JointState, '/joint_commands', 10)
@@ -99,6 +106,11 @@ class DemoNode(Node):
         self.t_start = self.t
 
 
+    def set_pointcmd(self, new_pointcmd):
+        self.lastpointcmd = self.pointcmd
+        self.pointcmd = new_pointcmd
+
+
     def update(self):
         # Grab the current time.
         now = self.get_clock().now()
@@ -113,7 +125,51 @@ class DemoNode(Node):
                 qd, qddot = self.super_smart_goto(self.t - CYCLE * 2, [WAITING_POS[0], WAITING_POS[1], self.position0[2]], WAITING_POS, CYCLE)
             else:
                 qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
+
+                # self.set_mode(Mode.WAITING)
+                self.set_mode(Mode.POINTING)
+                self.set_pointcmd([0.27, 0.55, 0.0])
+
+        elif self.mode is Mode.POINTING:
+            if self.t - self.t_start < CYCLE:
+                # self.get_logger().info('Last Point and Point: %s, %s' % (self.lastpointcmd, self.pointcmd))
+                (xD, vD) = goto5(self.t - self.t_start, CYCLE, np.array(self.lastpointcmd), self.pointcmd)
+                qdlast = self.qD
+                xDlast = self.xD
+
+                (p, _, Jv, _) = self.chain.fkin(qdlast)
+
+                J = Jv
+                vr = vD + 20.0 * (xDlast - p)
+                qddot = np.linalg.inv(J) @ vr
+
+                qD = qdlast + 0.01 * qddot
+                
+                self.qD = qD.flatten().tolist()
+                self.xD = xD.flatten().tolist()
+                qddot = qddot.flatten().tolist()
+                qD = qD.flatten().tolist()
+
+                self.qddot = qddot
+                qd = qD
+
+            else:
+                qd = self.qD
+                qddot = self.qddot
+
+                self.set_mode(Mode.RETURNING)
+
+        elif self.mode is Mode.RETURNING:
+            if self.t - self.t_start < CYCLE:
+                qd, qddot = self.super_smart_goto(self.t - self.t_start, self.qD, WAITING_POS, CYCLE)
+            else:
+                qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
+                self.pointcmd = self.x_waiting
                 self.set_mode(Mode.WAITING)
+                self.get_logger().info("HIT WAITING: %s" % (self.mode))
+
+                self.qD = WAITING_POS
+                self.xD = self.x_waiting
 
         else:  # elif self.mode is Mode.WAITING:
             qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
