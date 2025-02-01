@@ -5,6 +5,7 @@ from math import sin, cos, pi
 
 from rclpy.node         import Node
 from sensor_msgs.msg    import JointState
+from geometry_msgs.msg  import Point, Pose
 
 from hw5code.TrajectoryUtils import goto, spline, goto5, spline5
 from hw6sols.KinematicChainSol import KinematicChain
@@ -43,6 +44,7 @@ class DemoNode(Node):
         self.qD = WAITING_POS
         self.xD = ptip
         self.qddot = None
+        self.qgoal = None
         self.lastpointcmd = self.x_waiting
         self.pointcmd = self.x_waiting
         self.actpos = self.position0.copy()
@@ -58,6 +60,9 @@ class DemoNode(Node):
 
         self.fbksub = self.create_subscription(
             JointState, '/joint_states', self.recvfbk, 10)
+        
+        self.pointsub = self.create_subscription(
+            Point, '/point', self.recvpoint, 10)
 
         rate           = RATE
         self.starttime = self.get_clock().now()
@@ -95,8 +100,28 @@ class DemoNode(Node):
 
     # Receive feedback - called repeatedly by incoming messages.
     def recvfbk(self, fbkmsg):
-        # print(list(fbkmsg.position))
+        self.actpos = fbkmsg.position
+        # self.get_logger().info("actpos and type: %r, %r" % (self.actpos, type(self.actpos)))
         pass
+
+
+    def recvpoint(self, pointmsg):
+        x = pointmsg.x
+        y = pointmsg.y
+        z = pointmsg.z
+        
+        if self.mode is Mode.WAITING:
+            if ((x - 0.7455) ** 2 + (y - 0.04) ** 2 + (z - 0.11) ** 2) ** (1 / 2) < 0.74 and z >= 0.0 and y > 0.0:
+                self.set_pointcmd([x, y, z])
+                self.qgoal = self.newton_raphson(self.pointcmd)
+                self.get_logger().info("qgoal: %r" % self.qgoal)
+                self.set_mode(Mode.POINTING)
+            
+                self.get_logger().info("Running point %r, %r, %r" % (x,y,z))
+            else:
+                self.get_logger().info('Not in the dome. Please try again dummy...')
+        else:
+            self.get_logger().info('Not waiting yet. Please wait dummy...')
 
 
     def super_smart_goto(self, t, initial_pos, final_pos, cycle):
@@ -118,6 +143,38 @@ class DemoNode(Node):
         theta_sh = pos[1]
         tau_shoulder = self.A * sin(theta_sh) + self.B * cos(theta_sh) - 0.1
         return [0.0, tau_shoulder, 0.0]
+    
+
+    def wraps(self, q):
+        # return (q - pi) * np.round(q / (pi))
+        self.get_logger().info("q, q[0], q[1], q[2]: %r, %r, %r, %r" % (q, q[0], q[1], q[2]))
+        return [q[0] % pi - pi, q[1] % pi - pi, q[2] % pi - pi]
+    
+    
+    
+    def newton_raphson(self, xgoal):
+        xdistance = []
+        qstepsize = []
+        q = self.actpos
+        N = 1000
+        for i in range(N+1):
+            (x, _, Jv, _) = self.chain.fkin(q)
+            xdelta = (xgoal - x)
+            qdelta = np.linalg.inv(Jv) @ xdelta
+            q = q + qdelta * 0.3
+            xdistance.append(np.linalg.norm(xdelta))
+            qstepsize.append(np.linalg.norm(qdelta))
+            
+            # self.get_logger().info("q: %r" % q)
+
+            if np.linalg.norm(x-xgoal) < 1e-12:
+                self.get_logger().info("Completed in %d iterations" % i)
+                # q = self.wraps(q)
+                return q.tolist()
+            
+            # q = self.wraps(q)
+
+        return WAITING_POS
 
 
     def update(self):
@@ -135,32 +192,35 @@ class DemoNode(Node):
             else:
                 qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
 
-                # self.set_mode(Mode.WAITING)
-                self.set_mode(Mode.POINTING)
-                self.set_pointcmd([0.27, 0.55, 0.02])
+                self.set_mode(Mode.WAITING)
+                # self.set_mode(Mode.POINTING)
+                # self.set_pointcmd([0.27, 0.55, 0.02])
 
         elif self.mode is Mode.POINTING:
             if self.t - self.t_start < CYCLE:
                 # self.get_logger().info('Last Point and Point: %s, %s' % (self.lastpointcmd, self.pointcmd))
-                (xD, vD) = goto5(self.t - self.t_start, CYCLE, np.array(self.lastpointcmd), self.pointcmd)
-                qdlast = self.qD
-                xDlast = self.xD
+                # (xD, vD) = goto5(self.t - self.t_start, CYCLE, np.array(self.lastpointcmd), self.pointcmd)
+                # qdlast = self.qD
+                # xDlast = self.xD
 
-                (p, _, Jv, _) = self.chain.fkin(qdlast)
+                # (p, _, Jv, _) = self.chain.fkin(qdlast)
 
-                J = Jv
-                vr = vD + 20.0 * (xDlast - p)
-                qddot = np.linalg.inv(J) @ vr
+                # J = Jv
+                # vr = vD + 20.0 * (xDlast - p)
+                # qddot = np.linalg.inv(J) @ vr
 
-                qD = qdlast + 0.01 * qddot
+                # qD = qdlast + 0.01 * qddot
                 
-                self.qD = qD.flatten().tolist()
-                self.xD = xD.flatten().tolist()
-                qddot = qddot.flatten().tolist()
-                qD = qD.flatten().tolist()
+                # self.qD = qD.flatten().tolist()
+                # self.xD = xD.flatten().tolist()
+                # qddot = qddot.flatten().tolist()
+                # qD = qD.flatten().tolist()
 
+                # self.qddot = qddot
+                # qd = qD
+                qd, qddot = self.super_smart_goto(self.t - self.t_start, WAITING_POS, self.qgoal, CYCLE)
+                self.qD = qd
                 self.qddot = qddot
-                qd = qD
 
             else:
                 qd = self.qD

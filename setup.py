@@ -34,7 +34,8 @@ setup(
     entry_points={
         'console_scripts': [
             'wave = project.wave:main',
-            'toucharb = project.toucharb:main'
+            'toucharb = project.toucharb:main',
+            'receivepoint = project.receivepoint:main'
         ],
     },
 )
