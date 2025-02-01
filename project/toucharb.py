@@ -45,6 +45,9 @@ class DemoNode(Node):
         self.qddot = None
         self.lastpointcmd = self.x_waiting
         self.pointcmd = self.x_waiting
+        self.actpos = self.position0.copy()
+        self.A = -1.85
+        self.B = 0
 
         self.cmdmsg = JointState()
         self.cmdpub = self.create_publisher(JointState, '/joint_commands', 10)
@@ -111,6 +114,12 @@ class DemoNode(Node):
         self.pointcmd = new_pointcmd
 
 
+    def gravity(self, pos):
+        theta_sh = pos[1]
+        tau_shoulder = self.A * sin(theta_sh) + self.B * cos(theta_sh) - 0.1
+        return [0.0, tau_shoulder, 0.0]
+
+
     def update(self):
         # Grab the current time.
         now = self.get_clock().now()
@@ -128,7 +137,7 @@ class DemoNode(Node):
 
                 # self.set_mode(Mode.WAITING)
                 self.set_mode(Mode.POINTING)
-                self.set_pointcmd([0.27, 0.55, 0.0])
+                self.set_pointcmd([0.27, 0.55, 0.02])
 
         elif self.mode is Mode.POINTING:
             if self.t - self.t_start < CYCLE:
@@ -174,7 +183,8 @@ class DemoNode(Node):
         else:  # elif self.mode is Mode.WAITING:
             qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
         
-        self.sendcmd(qd, qddot)
+        tau = self.gravity(self.actpos)
+        self.sendcmd(qd, qddot, tau)
 
 
 def main(args=None):
