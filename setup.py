@@ -35,7 +35,8 @@ setup(
         'console_scripts': [
             'wave = project.wave:main',
             'toucharb = project.toucharb:main',
-            'receivepoint = project.receivepoint:main'
+            'receivepoint = project.receivepoint:main',
+            'detector = project.detector:main',
         ],
     },
 )
