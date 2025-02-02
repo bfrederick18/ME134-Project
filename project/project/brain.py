@@ -4,10 +4,11 @@ import numpy as np
 import rclpy
 import cv_bridge
 
-from rclpy.node         import Node
-from sensor_msgs.msg    import Image
+from rclpy.node import Node
+from sensor_msgs.msg import Image
 
-from geometry_msgs.msg  import Point, Pose
+from geometry_msgs.msg import Point
+from project_msgs.msg import Object, ObjectArray, PointArray
 
 
 class DemoNode(Node):
@@ -24,13 +25,16 @@ class DemoNode(Node):
         self.x0 = 0.664
         self.y0 = 0.455
 
+        self.object_array = ObjectArray()
+        self.object_array.objects = []
+
+        self.point_array = PointArray()
+        self.point_array.points = []
+
         self.pubrgb = self.create_publisher(Image, name+'/image_raw', 3)
 
-        self.pub_point = self.create_publisher(Point, name + '/disc_world', 1)
-        self.pub_point_start = self.create_publisher(Point, name + '/rect_start', 1)
-        self.pub_point_end = self.create_publisher(Point, name + '/rect_end', 1)
-        self.pub_point_center = self.create_publisher(Point, name + '/rect_center', 1)
-
+        self.pub_points = self.create_publisher(PointArray, name + '/points_array', 1)
+        
         self.get_logger().info('Name: %s' % name)
 
         self.bridge = cv_bridge.CvBridge()
@@ -38,19 +42,9 @@ class DemoNode(Node):
         self.sub = self.create_subscription(
             Image, '/image_raw', self.process, 1)
         
-        self.disc_location = [0.0, 0.0]
-        self.discsub = self.create_subscription(
-            Point, '/balldetector/disc_location', self.recv_disc_location, 1)
+        self.sub_obj_array = self.create_subscription(
+            ObjectArray, '/detector/object_array', self.recv_obj_array, 1)
         
-        self.rect_location_start = [0.0, 0.0]
-        self.rect_location_end = [0.0, 0.0]
-        self.rect_location = [0.0, 0.0]
-        self.rectsubstart = self.create_subscription(
-            Point, '/balldetector/strip_pose_start', self.recv_rect_location_start, 1)
-        self.rectsubend = self.create_subscription(
-            Point, '/balldetector/strip_pose_end', self.recv_rect_location_end, 1)
-        self.rectsubcenter = self.create_subscription(
-            Point, '/balldetector/strip_pose_center', self.recv_rect_location_center, 1)
         # Report.
         self.get_logger().info("Mapper running...")
 
@@ -60,32 +54,15 @@ class DemoNode(Node):
         self.destroy_node()
 
 
-    def recv_disc_location(self, pointmsg):
-        x = pointmsg.x
-        y = pointmsg.y
-        self.disc_location = [x, y]
+    def recv_obj_array(self, msg):
+        # self.get_logger().info('Received Object Array: %s' % msg)
+        self.object_array.objects = []
 
-        # self.get_logger().info('Disc Location: %r' % self.disc_location)
-    
-
-    def recv_rect_location_start(self, rect_point_start_msg):
-        x = rect_point_start_msg.x
-        y = rect_point_start_msg.y
-        self.rect_location_start = [x, y]
+        for obj in msg.objects:
+            # self.get_logger().info('Received Object: %s' % obj)
+            self.object_array.objects.append(obj)
 
 
-    def recv_rect_location_end(self, rect_point_end_msg):
-        x = rect_point_end_msg.x
-        y = rect_point_end_msg.y
-        self.rect_location_end = [x, y]
-
-
-    def recv_rect_location_center(self, rect_point_center_msg):
-        x = rect_point_center_msg.x
-        y = rect_point_center_msg.y
-        self.rect_location = [x, y]
-
-    # Pixel Conversion
     def pixelToWorld(self, image, u, v, x0, y0, annotateImage=True):
         '''
         Convert the (u,v) pixel position into (x,y) world coordinates
@@ -168,6 +145,50 @@ class DemoNode(Node):
         # self.get_logger().info('Types: %s, %s, %s, %s' % (uc, vc, int(self.disc_location[0]), int(self.disc_location[1])))
         # self.get_logger().info('Types: %s, %s, %s, %s' % (type(uc), type(vc), type(self.disc_location[0]), type(self.disc_location[1])))
 
+
+        for obj in self.object_array.objects:
+            if obj.type == Object.DISK:
+                disc_world = self.pixelToWorld(image, int(obj.x), int(obj.y), self.x0, self.y0, annotateImage=False)
+                
+                # self.get_logger().info('Disc World: %s' % disc_world)
+
+                if disc_world is not None:
+                    disc_world_msg = Point()
+                    disc_world_x, disc_world_y = disc_world
+                    disc_world_msg.x = float(disc_world_x)
+                    disc_world_msg.y = float(disc_world_y)
+                    disc_world_msg.z = 0.0
+                    self.point_array.points.append(disc_world_msg)
+            
+            elif obj.type == Object.STRIP:
+                strip_world_center = self.pixelToWorld(image, int(obj.x), int(obj.y), self.x0, self.y0, annotateImage=False)
+                if strip_world_center is not None:
+                    strip_world_start_msg = Point()
+                    strip_world_end_msg = Point()
+
+                    TAP_FACTOR = 10
+
+                    strip_world_start_x = obj.x - TAP_FACTOR * np.sin(np.radians(obj.theta))
+                    strip_world_start_y = obj.y + TAP_FACTOR * np.cos(np.radians(obj.theta))
+                    strip_world_end_x = obj.x + TAP_FACTOR * np.sin(np.radians(obj.theta))
+                    strip_word_end_y = obj.y - TAP_FACTOR * np.cos(np.radians(obj.theta))
+
+                    strip_world_start_msg.x = strip_world_start_x
+                    strip_world_start_msg.y = strip_world_start_y
+                    strip_world_end_msg.x = strip_world_end_x
+                    strip_world_end_msg.y = strip_word_end_y
+
+                    self.point_array.points.append(strip_world_start_msg)
+                    self.point_array.points.append(strip_world_end_msg)
+
+        if len(self.point_array.points) > 0:
+            self.pub_points.publish(self.point_array)
+            self.get_logger().info('All points: %s' % self.point_array.points)
+
+            self.point_array.points = []
+                    
+
+        """
         if self.disc_location[0] is not 0.0 and self.disc_location[1] is not 0.0:
             disc_world = self.pixelToWorld(image, int(self.disc_location[0]), int(self.disc_location[1]), self.x0, self.y0, annotateImage=False)
             if disc_world is not None:
@@ -212,6 +233,10 @@ class DemoNode(Node):
             self.rect_location_start = [0.0, 0.0]
             self.rect_location_end = [0.0, 0.0]
             self.rect_location = [0.0, 0.0]
+        """
+
+
+
 
         # Mark the center of the image.
         cv2.circle(image, (uc, vc), 5, self.red, -1)

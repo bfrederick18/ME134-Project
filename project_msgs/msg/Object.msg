@@ -4,4 +4,7 @@ int32 STRIP=1
 int32 id
 int32 type
 
-geometry_msgs/Pose pose
+float64 x
+float64 y
+float64 z
+float64 theta

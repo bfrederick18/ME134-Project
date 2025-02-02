@@ -40,8 +40,8 @@ class DetectorNode(Node):
         # self.hsvlimits = np.array([[10, 40], [60, 200], [20, 255]])
         self.hsvlimits = np.array([[10, 40], [60, 220], [125, 255]])
 
-        self.pubrgb = self.create_publisher(Image, name+'/image_raw', 3)
-        self.pubbin = self.create_publisher(Image, name+'/binary',    3)
+        self.pubrgb = self.create_publisher(Image, name +'/image_raw', 3)
+        self.pubbin = self.create_publisher(Image, name +'/binary',    3)
 
         self.pub_obj_array = self.create_publisher(ObjectArray, name + '/object_array', 1)
         
@@ -53,7 +53,8 @@ class DetectorNode(Node):
 
         self.bridge = cv_bridge.CvBridge()
 
-        self.object_list = ObjectArray()
+        self.object_array = ObjectArray()
+        self.object_array.objects = []
 
         # Finally, subscribe to the incoming image topic.  Using a
         # queue size of one means only the most recent message is
@@ -72,6 +73,8 @@ class DetectorNode(Node):
 
     # Process the image (detect the ball).
     def process(self, msg):
+        self.object_array.objects = []
+
         # Confirm the encoding and report.
         assert(msg.encoding == "rgb8")
         # self.get_logger().info(
@@ -137,7 +140,7 @@ class DetectorNode(Node):
                     ellipse = cv2.fitEllipse(contour)
                     ((ue, ve), (we, he), angle) = ellipse
                 except Exception as e:
-                    self.get_logger().info("Exception: %s" % str(e))
+                    # self.get_logger().info("Exception: %s" % str(e))
                     ellipse = None
 
                 # self.get_logger().info("Ellipse: %s" % str(ellipse))
@@ -167,51 +170,35 @@ class DetectorNode(Node):
                         rect_start = [int(um - TAP_FACTOR * (hm / 2) * np.sin(np.radians(angle))), int(vm + TAP_FACTOR * (hm / 2) * np.cos(np.radians(angle)))]
                         rect_end = [int(um + TAP_FACTOR * (hm / 2) * np.sin(np.radians(angle))), int(vm - TAP_FACTOR * (hm / 2) * np.cos(np.radians(angle)))]
                         
-                        
-                        # rect_point_start_msg = Point()
-                        # rect_point_start_msg.x = float(rect_start[0])
-                        # rect_point_start_msg.y = float(rect_start[1])
-                        # rect_point_start_msg.z = 0.0
-                        # self.pub_point_start.publish(rect_point_start_msg)
-                        
-                        # rect_point_end_msg = Point()
-                        # rect_point_end_msg.x = float(rect_end[0])
-                        # rect_point_end_msg.y = float(rect_end[1])
-                        # rect_point_end_msg.z = 0.0
-                        # self.pub_point_end.publish(rect_point_end_msg)
 
-                        # rect_point_center_msg = Point()
-                        # rect_point_center_msg.x = float(um)
-                        # rect_point_center_msg.y = float(vm)
-                        # rect_point_center_msg.z = 0.0
-                        # self.pub_point_center.publish(rect_point_center_msg)
-                        
-                        # self.get_logger().info("Rect: %s" % str(rect_point_msg))
+                        obj_rect = Object()
+                        obj_rect.type = Object.STRIP
+                        obj_rect.x = float(um)
+                        obj_rect.y = float(vm)
+                        obj_rect.z = 0.0
+                        obj_rect.theta = angle
+
+                        self.object_array.objects.append(obj_rect)
+
+                        self.get_logger().info("angle: %s" % str(angle))
+                        #self.get_logger().info("Strip z and w: %s %s" % (obj_rect.pose.orientation.z, obj_rect.pose.orientation.w))
 
                     else:
                         cv2.ellipse(frame, ellipse, self.green, 2)
                         cv2.circle(frame, (int(ue), int(ve)), 5, self.red,    -1)
 
-                        # disc_point_msg = Point()
-                        # disc_point_msg.x = ue
-                        # disc_point_msg.y = ve
-                        # disc_point_msg.z = 0.0
-
                         obj_disk = Object()
                         obj_disk.type = Object.DISK
-                        obj_disk.pose.position.x = ue
-                        obj_disk.pose.position.y = ve
-                        obj_disk.pose.position.z = 0.0
-                        obj_disk.pose.quaternion.x = 0.0
-                        obj_disk.pose.quaternion.y = 0.0
-                        obj_disk.pose.quaternion.z = 0.0
-                        obj_disk.pose.quaternion.w = 0.0
+                        obj_disk.x = ue
+                        obj_disk.y = ve
+                        obj_disk.z = 0.0
+                        obj_disk.theta = 0.0
 
-                        self.object_list.append(obj_disk)
+                        self.object_array.objects.append(obj_disk)
 
 
-                        #self.pub_point.publish(disc_point_msg)
-                        self.get_logger().info("Disc: %s" % str(obj_disk))
+                        #self.pub_point.publish(disk_point_msg)
+                        #self.get_logger().info("Disk: %s" % str(obj_disk))
 
                     # Draw the circle (yellow) and centroid (red) on the
                     # original image.
@@ -226,7 +213,9 @@ class DetectorNode(Node):
         # Convert the frame back into a ROS image and republish.
         self.pubrgb.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
 
-        self.pub_point.publish(self.object_list)
+        self.pub_obj_array.publish(self.object_array)
+
+        #self.get_logger().info("List: %s" % str(self.object_array))
 
         # Also publish the binary (black/white) image.
         self.pubbin.publish(self.bridge.cv2_to_imgmsg(binary))

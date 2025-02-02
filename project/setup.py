@@ -37,6 +37,7 @@ setup(
             'toucharb = project.toucharb:main',
             'receivepoint = project.receivepoint:main',
             'detector = project.detector:main',
+            'brain = project.brain:main',
         ],
     },
 )
