@@ -1,0 +1,19 @@
+#
+#  YAML File to test the HEBI node
+#
+#  If you start the node via the launch file, you can specify the
+#  parameters there.
+#
+#  If you start the node directly with 'ros2 run', you will need to
+#  specify the pameters here and run:
+#
+#    ros2 run hebiros hebinode --ros-args --params-file <this_file_name>
+#
+hebinode:
+  ros__parameters:
+    simluate:  False
+    family:    'robotlab'
+    motors:    ['9.6', '9.1', '9.2']
+    joints:    ['one', 'two', 'three']
+    rate:      100.0
+    lifetime:  50.0

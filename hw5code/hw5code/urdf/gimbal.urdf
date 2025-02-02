@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+
+<robot name="gimbal">
+  
+  <!-- *************************************************** -->
+  <!-- ******************** Kinematics ******************* -->
+  <!-- *************************************************** -->
+  <!-- Note the 'origin' tag in the joints defines the
+       shift and reorientation before the continuous joint
+       rotates around the 'axis'. -->
+
+  <link name="world">
+    <visual>
+      <geometry>
+        <mesh filename="package://hw5code/meshes/GimbalBase.dae"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="pan" type="continuous">
+    <parent link="world"/>
+    <child  link="lowerarm"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis   xyz="0 0 1"/>
+  </joint>
+
+  <link name="lowerarm">
+    <visual>
+      <geometry>
+        <mesh filename="package://hw5code/meshes/GimbalLowerArm.dae"/>
+      </geometry>
+    </visual>
+    <inertial>
+      <mass value="0.5"/>
+      <inertia
+          ixx="0.005" ixy="0.0" ixz="0.0"
+          iyy="0.005" iyz="0.0"
+          izz="0.005"/>
+    </inertial>
+  </link>
+
+  <joint name="tilt" type="continuous">
+    <parent link="lowerarm"/>
+    <child  link="upperarm"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis   xyz="1 0 0"/>
+  </joint>
+
+  <link name="upperarm">
+    <visual>
+      <geometry>
+        <mesh filename="package://hw5code/meshes/GimbalUpperArm.dae"/>
+      </geometry>
+    </visual>
+    <inertial>
+      <mass value="0.5"/>
+      <inertia
+          ixx="0.005" ixy="0.0" ixz="0.0"
+          iyy="0.005" iyz="0.0"
+          izz="0.005"/>
+    </inertial>
+  </link>
+
+  <joint name="roll" type="continuous">
+    <parent link="upperarm"/>
+    <child  link="tip"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis   xyz="0 1 0"/>
+  </joint>
+
+  <link name="tip">
+    <visual>
+      <geometry>
+        <mesh filename="package://hw5code/meshes/CubePlus.dae"/>
+      </geometry>
+    </visual>
+    <inertial>
+      <mass value="4.0"/>
+      <inertia
+          ixx="0.01" ixy="0.0" ixz="0.0"
+          iyy="0.01" iyz="0.0"
+          izz="0.01"/>
+    </inertial>
+  </link>
+
+</robot>
