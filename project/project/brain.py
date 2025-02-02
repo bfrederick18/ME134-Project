@@ -140,20 +140,15 @@ class DemoNode(Node):
             elif obj.type == Object.STRIP:
                 strip_world_center = self.pixelToWorld(image, int(obj.x), int(obj.y), self.x0, self.y0, annotateImage=False)
                 if strip_world_center is not None:
+                    strip_world_x, strip_world_y = strip_world_center
                     strip_world_start_msg = Point()
                     strip_world_end_msg = Point()
 
-                    TAP_FACTOR = 10
-
-                    strip_world_start_x = obj.x - TAP_FACTOR * np.sin(np.radians(obj.theta))
-                    strip_world_start_y = obj.y + TAP_FACTOR * np.cos(np.radians(obj.theta))
-                    strip_world_end_x = obj.x + TAP_FACTOR * np.sin(np.radians(obj.theta))
-                    strip_word_end_y = obj.y - TAP_FACTOR * np.cos(np.radians(obj.theta))
-
-                    strip_world_start_msg.x = strip_world_start_x
-                    strip_world_start_msg.y = strip_world_start_y
-                    strip_world_end_msg.x = strip_world_end_x
-                    strip_world_end_msg.y = strip_word_end_y
+                    TAP_FACTOR = 0.04
+                    strip_world_start_msg.x = strip_world_x - TAP_FACTOR * np.cos(np.radians(obj.theta))
+                    strip_world_start_msg.y = strip_world_y + TAP_FACTOR * np.sin(np.radians(obj.theta))
+                    strip_world_end_msg.x = strip_world_x + TAP_FACTOR * np.cos(np.radians(obj.theta))
+                    strip_world_end_msg.y = strip_world_y - TAP_FACTOR * np.sin(np.radians(obj.theta))
 
                     self.point_array.points.append(strip_world_start_msg)
                     self.point_array.points.append(strip_world_end_msg)
