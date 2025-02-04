@@ -29,6 +29,47 @@ class Mode(Enum):
     POINTING_RECT_END = 6
 
 
+class Spline():
+    # Initialization connecting last command to next segment
+    def __init__(self, tcmd, pcmd, vcmd, segment):
+        # Save the initial time and duration.
+        self.t0 = tcmd
+        self.T = segment.Tmove
+
+        # Pre-compute the parameters.
+        p0 = np.array(pcmd)
+        v0 = np.array(vcmd)
+        pf = np.array(segment.pf)
+        vf = np.array(segment.vf)
+        T = self.T
+
+        self.a = p0
+        self.b = v0
+        self.c = np.zeros_like(p0)
+        self.d = + 10*(pf-p0)/T**3 - 6*v0/T**2 - 4*vf/T**2
+        self.e = - 15*(pf-p0)/T**4 + 8*v0/T**3 + 7*vf/T**3
+        self.f = + 6*(pf-p0)/T**5 - 3*v0/T**4 - 3*vf/T**4
+    
+    # Evaluation at any time (Shortening self to s).
+    def evaluate(s, t):
+        # Get the time relative to the start time.
+        t = t - s.t0
+
+        # Compute the current commands.
+        p = s.a + s.b*t + s.c*t**2 + s.d*t**3 + s.e*t**4 + s.f*t**5
+        v = s.b + 2*s.c*t + 3*s.d*t**2 + 4*s.e*t**3 + 5*s.f*t**4
+        
+        # Return as a list.
+        return (p.tolist(),v.tolist())
+
+
+class Segment:
+    def __init__(self, pf, vf, Tmove):
+        self.pf = pf      # final joint positions (list)
+        self.vf = vf      # final joint velocities (list)
+        self.Tmove = Tmove  # movement time for this segment (seconds)
+
+
 class DemoNode(Node):
     def __init__(self, name):
         super().__init__(name)
@@ -68,6 +109,13 @@ class DemoNode(Node):
 
         self.sub_point_array = self.create_subscription(
             PointArray, '/brain/points_array', self.recvpoint_list, 1)
+        
+        self.segments = []     # list of upcoming segments (each a Segment object)
+        self.spline = None     # current spline (if any)
+        self.abort = False     # flag to abort the current spline
+        self.tcmd = 0          # time of last command (will be set in update)
+        self.pcmd = WAITING_POS[:]  # last commanded joint position (start at WAITING_POS)
+        self.vcmd = [0.0, 0.0, 0.0] # last commanded joint velocity
 
         rate           = RATE
         self.starttime = self.get_clock().now()
@@ -130,18 +178,16 @@ class DemoNode(Node):
 
     def recvpoint_list(self, msg):
         self.get_logger().info("Received a list of points: %r" % msg.points)
-
         if self.mode is Mode.WAITING:
-            self.point_array.points = []
-            for point in msg.points:
-                self.point_array.points.append(point)
+            self.point_array.points = msg.points[:]
 
-            a_point = self.point_array.points.pop(0)
-            if ((a_point.x - 0.7455) ** 2 + (a_point.y - 0.04) ** 2 + (a_point.z - 0.11) ** 2) ** (1 / 2) < 0.74 and a_point.z >= 0.0 and a_point.y > 0.0:
-                self.set_pointcmd([a_point.x, a_point.y, a_point.z])
-                self.qgoal = self.newton_raphson(self.pointcmd)
-                self.get_logger().info("qgoal: %r" % self.qgoal)
-                self.set_mode(Mode.POINTING)
+            if len(self.point_array.points) > 0:
+                first_point = self.point_array.points[0]
+                if ((first_point.x - 0.7455) ** 2 + (first_point.y - 0.04) ** 2 + (first_point.z - 0.11) ** 2) ** 0.5 < 0.74 and first_point.z >= 0.0 and first_point.y > 0.0:
+                    self.set_pointcmd([first_point.x, first_point.y, first_point.z])
+                    self.set_mode(Mode.POINTING)
+                else:
+                    self.get_logger().info('First point not in safety dome. Ignoring...')
 
 
     def super_smart_goto(self, t, initial_pos, final_pos, cycle):
@@ -202,20 +248,93 @@ class DemoNode(Node):
                 self.set_mode(Mode.WAITING)
 
         elif self.mode is Mode.POINTING:
-            if self.t - self.t_start < CYCLE:
-                qd, qddot = self.super_smart_goto(self.t - self.t_start, WAITING_POS, self.qgoal, CYCLE)
-                self.qD = qd
-                self.qddot = qddot
+            if len(self.segments) == 0 and len(self.point_array.points) > 0:
+                cart_points = [self.pointcmd]
+                for pt in self.point_array.points:
+                    cart_points.append([pt.x, pt.y, pt.z])
 
-            else:
+                self.point_array.points = []
+                Tmove = CYCLE * 3 / 4
+
+                for i in range(len(cart_points) - 1):
+                    p1 = cart_points[i]
+                    p2 = cart_points[i + 1]
+
+                    transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.07]
+
+                    q1 = self.newton_raphson(p1)
+                    qT = self.newton_raphson(transitional)
+                    q2 = self.newton_raphson(p2)
+
+                    if i == 0:
+                        self.segments.append(Segment(pf=q2, vf=[0.0, 0.0, 0.0], Tmove=Tmove*2))
+                        continue
+
+                    dx = (transitional[0] - p1[0])
+                    dy = (transitional[1] - p1[1])
+                    v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
+
+                    (_, _, Jv, _) = self.chain.fkin(qT)
+                    qdotT = np.linalg.pinv(Jv) @ v_cart
+                    qdotT = qdotT.flatten().tolist()
+
+                    seg1 = Segment(pf=qT, vf=qdotT, Tmove=Tmove)
+                    seg2 = Segment(pf=q2, vf=[0.0, 0.0, 0.0], Tmove=Tmove)
+
+                    self.segments.append(seg1)
+                    self.segments.append(seg2)
+
+                self.segments.append(Segment(pf=WAITING_POS, vf=[0.0, 0.0, 0.0], Tmove=Tmove*2))
+
+                self.tcmd = self.t
+                self.pcmd = self.actpos[:]  # use current joint state
+                self.vcmd = [0.0, 0.0, 0.0]
+
                 qd = self.qD
                 qddot = self.qddot
 
-                self.set_mode(Mode.RETURNING)
+            if self.spline and ((self.t - self.spline.t0) > self.spline.T or self.abort):
+                self.spline = None
+                self.abort = False
+                self.tcmd = self.t
 
-            if abs(dist(list(self.actpos), qd)) > 0.07:
-                self.set_mode(Mode.RETURNING)
-                self.get_logger().info("HIT RETURNING: %s" % (self.mode))
+            if not self.spline and len(self.segments) > 0:
+                next_seg = self.segments.pop(0)
+                self.spline = Spline(self.tcmd, self.pcmd, self.vcmd, next_seg)
+
+            if self.spline:
+                (self.pcmd, self.vcmd) = self.spline.evaluate(self.t)
+                qd = self.pcmd
+                qddot = self.vcmd
+            else:
+                qd, qddot = self.pcmd, [0.0, 0.0, 0.0]
+
+            if self.spline is None and len(self.segments) == 0 and len(self.point_array.points) == 0:
+                self.get_logger().info("Trajectory complete, switching to WAITING mode.")
+                self.set_mode(Mode.WAITING)
+                self.pointcmd = self.x_waiting
+                qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
+            
+            # if abs(dist(self.actpos, qd)) > 0.07:
+            #     self.spline = None
+            #     self.segments = []
+            #     self.set_mode(Mode.RETURNING)
+            #     self.get_logger().info("HIT RETURNING: %s" % (self.mode))
+
+            # if self.t - self.t_start < CYCLE:
+            #     qd, qddot = self.super_smart_goto(self.t - self.t_start, WAITING_POS, self.qgoal, CYCLE)
+            #     self.qD = qd
+            #     self.qddot = qddot
+
+            # else:
+            #     qd = self.qD
+            #     qddot = self.qddot
+
+            #     self.set_mode(Mode.RETURNING)
+
+            # if abs(dist(list(self.actpos), qd)) > 0.07:
+            #     self.set_mode(Mode.RETURNING)
+            #     self.get_logger().info("HIT RETURNING: %s" % (self.mode))
 
         elif self.mode is Mode.RETURNING:
             if self.t - self.t_start < CYCLE:
