@@ -117,7 +117,7 @@ class DemoNode(Node):
         vc = H//2
 
         xyCenter = self.pixelToWorld(image, uc, vc, self.x0, self.y0, annotateImage=False)
-        cv2.circle(image, (uc, vc), 5, self.red, -1)
+        # cv2.circle(image, (uc, vc), 5, self.red, -1)
 
         if xyCenter is None:
             pass
