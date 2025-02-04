@@ -134,7 +134,7 @@ class DemoNode(Node):
                     disc_world_x, disc_world_y = disc_world
                     disc_world_msg.x = float(disc_world_x)
                     disc_world_msg.y = float(disc_world_y)
-                    disc_world_msg.z = 0.0
+                    disc_world_msg.z = 0.012
                     self.point_array.points.append(disc_world_msg)
             
             elif obj.type == Object.STRIP:
@@ -155,7 +155,7 @@ class DemoNode(Node):
 
         if len(self.point_array.points) > 0:
             self.pub_points.publish(self.point_array)
-            self.get_logger().info('All points: %s' % self.point_array.points)
+            # self.get_logger().info('All points: %s' % self.point_array.points)
 
             self.point_array.points = []
 

@@ -136,7 +136,7 @@ class DetectorNode(Node):
 
                         self.object_array.objects.append(obj_rect)
 
-                        self.get_logger().info("angle: %s" % str(angle))
+                        # self.get_logger().info("angle: %s" % str(angle))
 
                     else:
                         cv2.ellipse(frame, ellipse, self.green, 2)

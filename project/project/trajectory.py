@@ -46,9 +46,9 @@ class Spline():
         self.a = p0
         self.b = v0
         self.c = np.zeros_like(p0)
-        self.d = + 10*(pf-p0)/T**3 - 6*v0/T**2 - 4*vf/T**2
-        self.e = - 15*(pf-p0)/T**4 + 8*v0/T**3 + 7*vf/T**3
-        self.f = + 6*(pf-p0)/T**5 - 3*v0/T**4 - 3*vf/T**4
+        self.d = + 10 * (pf - p0) / T ** 3 - 6 * v0 / T ** 2 - 4 * vf / T ** 2
+        self.e = - 15 * (pf - p0) / T ** 4 + 8 * v0 / T ** 3 + 7 * vf / T ** 3
+        self.f = + 6 * (pf - p0) / T ** 5 - 3 * v0 / T ** 4 - 3 * vf / T ** 4
     
     # Evaluation at any time (Shortening self to s).
     def evaluate(s, t):
@@ -86,7 +86,7 @@ class DemoNode(Node):
         self.x_waiting = ptip
         self.qD = WAITING_POS
         self.xD = ptip
-        self.qddot = None
+        self.qddot = [0.0, 0.0, 0.0]
         self.qgoal = None
         self.lastpointcmd = self.x_waiting
         self.pointcmd = self.x_waiting
@@ -110,12 +110,12 @@ class DemoNode(Node):
         self.sub_point_array = self.create_subscription(
             PointArray, '/brain/points_array', self.recvpoint_list, 1)
         
-        self.segments = []     # list of upcoming segments (each a Segment object)
-        self.spline = None     # current spline (if any)
-        self.abort = False     # flag to abort the current spline
-        self.tcmd = 0          # time of last command (will be set in update)
-        self.pcmd = WAITING_POS[:]  # last commanded joint position (start at WAITING_POS)
-        self.vcmd = [0.0, 0.0, 0.0] # last commanded joint velocity
+        self.segments = []
+        self.spline = None
+        self.abort = False
+        self.tcmd = 0
+        self.pcmd = WAITING_POS[:]
+        self.vcmd = [0.0, 0.0, 0.0]
 
         rate           = RATE
         self.starttime = self.get_clock().now()
@@ -215,23 +215,24 @@ class DemoNode(Node):
         xdistance = []
         qstepsize = []
         q = self.actpos
-        N = 1000
+        N = 500
+
         for i in range(N+1):
             (x, _, Jv, _) = self.chain.fkin(q)
             xdelta = (xgoal - x)
             qdelta = np.linalg.inv(Jv) @ xdelta
-            q = q + qdelta * 0.3
+            q = q + qdelta * 0.5
             xdistance.append(np.linalg.norm(xdelta))
             qstepsize.append(np.linalg.norm(qdelta))
 
             if np.linalg.norm(x-xgoal) < 1e-12:
                 self.get_logger().info("Completed in %d iterations" % i)
                 return q.tolist()
+            
         return WAITING_POS
 
 
     def update(self):
-        # Grab the current time.
         now = self.get_clock().now()
         self.t  = (now - self.starttime).nanoseconds * 1e-9
 
@@ -254,7 +255,7 @@ class DemoNode(Node):
                     cart_points.append([pt.x, pt.y, pt.z])
 
                 self.point_array.points = []
-                Tmove = CYCLE * 3 / 4
+                Tmove = CYCLE / 2
 
                 for i in range(len(cart_points) - 1):
                     p1 = cart_points[i]
@@ -262,7 +263,6 @@ class DemoNode(Node):
 
                     transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.07]
 
-                    q1 = self.newton_raphson(p1)
                     qT = self.newton_raphson(transitional)
                     q2 = self.newton_raphson(p2)
 
@@ -286,7 +286,7 @@ class DemoNode(Node):
 
                 self.segments.append(Segment(pf=WAITING_POS, vf=[0.0, 0.0, 0.0], Tmove=Tmove*2))
 
-                self.tcmd = self.t
+                self.tcmd = (now - self.starttime).nanoseconds * 1e-9  # self.t
                 self.pcmd = self.actpos[:]  # use current joint state
                 self.vcmd = [0.0, 0.0, 0.0]
 
@@ -315,50 +315,20 @@ class DemoNode(Node):
                 self.pointcmd = self.x_waiting
                 qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
             
-            # if abs(dist(self.actpos, qd)) > 0.07:
-            #     self.spline = None
-            #     self.segments = []
-            #     self.set_mode(Mode.RETURNING)
-            #     self.get_logger().info("HIT RETURNING: %s" % (self.mode))
+            if abs(dist(self.actpos, qd)) > 0.05:
+                self.spline = None
 
-            # if self.t - self.t_start < CYCLE:
-            #     qd, qddot = self.super_smart_goto(self.t - self.t_start, WAITING_POS, self.qgoal, CYCLE)
-            #     self.qD = qd
-            #     self.qddot = qddot
+                self.segments = [Segment(pf=WAITING_POS, vf=[0.0, 0.0, 0.0], Tmove=CYCLE)]
+                self.tcmd = (now - self.starttime).nanoseconds * 1e-9
+                self.pcmd = self.actpos[:]
+                self.vcmd = [0.0, 0.0, 0.0]
 
-            # else:
-            #     qd = self.qD
-            #     qddot = self.qddot
+                qd = self.qD
+                qddot = self.qddot
 
-            #     self.set_mode(Mode.RETURNING)
+                self.get_logger().info("HIT RETURNING: %s" % (self.mode))
 
-            # if abs(dist(list(self.actpos), qd)) > 0.07:
-            #     self.set_mode(Mode.RETURNING)
-            #     self.get_logger().info("HIT RETURNING: %s" % (self.mode))
-
-        elif self.mode is Mode.RETURNING:
-            if self.t - self.t_start < CYCLE:
-                qd, qddot = self.super_smart_goto(self.t - self.t_start, self.qD, WAITING_POS, CYCLE)
-            else:
-                if len(self.point_array.points) <= 0:
-                    qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
-                    self.pointcmd = self.x_waiting
-                    self.set_mode(Mode.WAITING)
-                    self.get_logger().info("HIT WAITING: %s" % (self.mode))
-
-                    self.qD = WAITING_POS
-                    self.xD = self.x_waiting
-                else:
-                    qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
-                    a_point = self.point_array.points.pop(0)
-                    if ((a_point.x - 0.7455) ** 2 + (a_point.y - 0.04) ** 2 + (a_point.z - 0.11) ** 2) ** (1 / 2) < 0.74 and a_point.z >= 0.0 and a_point.y > 0.0:
-                        self.set_pointcmd([a_point.x, a_point.y, a_point.z])
-                        self.qgoal = self.newton_raphson(self.pointcmd)
-                        self.get_logger().info("qgoal: %r" % self.qgoal)
-                        self.set_mode(Mode.POINTING)
-
-
-        else:  # elif self.mode is Mode.WAITING:
+        else: 
             qd, qddot = WAITING_POS, [0.0, 0.0, 0.0]
         
         tau = self.gravity(self.actpos)
