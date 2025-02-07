@@ -5,9 +5,8 @@ from math import sin, cos, pi, dist
 
 from rclpy.node         import Node
 from sensor_msgs.msg    import JointState
-from geometry_msgs.msg  import Point, Pose
 
-from project_msgs.msg import PointArray
+from project_msgs.msg import PointArray, Segment, SegmentArray, State
 
 from hw5code.TrajectoryUtils import goto, spline, goto5, spline5
 from hw6sols.KinematicChainSol import KinematicChain
@@ -34,13 +33,13 @@ class Spline():
     def __init__(self, tcmd, pcmd, vcmd, segment):
         # Save the initial time and duration.
         self.t0 = tcmd
-        self.T = segment.Tmove
+        self.T = segment.t
 
         # Pre-compute the parameters.
         p0 = np.array(pcmd)
         v0 = np.array(vcmd)
-        pf = np.array(segment.pf)
-        vf = np.array(segment.vf)
+        pf = np.array([segment.px, segment.py, segment.pz])
+        vf = np.array([segment.vx, segment.vy, segment.vz])
         T = self.T
 
         self.a = p0
@@ -61,13 +60,6 @@ class Spline():
         
         # Return as a list.
         return (p.tolist(),v.tolist())
-
-
-class Segment:
-    def __init__(self, pf, vf, Tmove):
-        self.pf = pf      # final joint positions (list)
-        self.vf = vf      # final joint velocities (list)
-        self.Tmove = Tmove  # movement time for this segment (seconds)
 
 
 class DemoNode(Node):
@@ -97,6 +89,8 @@ class DemoNode(Node):
         self.cmdmsg = JointState()
         self.cmdpub = self.create_publisher(JointState, '/joint_commands', 10)
 
+        self.state_pub = self.create_publisher(State, name + '/state', 10)
+
         self.get_logger().info("Waiting for a /joint_commands subscriber...")
         while(not self.count_subscribers('/joint_commands')):
             pass
@@ -104,11 +98,8 @@ class DemoNode(Node):
         self.fbksub = self.create_subscription(
             JointState, '/joint_states', self.recvfbk, 10)
         
-        self.point_array = PointArray()
-        self.point_array.points = []
-
-        self.sub_point_array = self.create_subscription(
-            PointArray, '/brain/points_array', self.recvpoint_list, 1)
+        self.sub_seg_array = self.create_subscription(
+            SegmentArray, '/brain/segment_array', self.recv_segment_array, 1)
         
         self.segments = []
         self.spline = None
@@ -122,6 +113,7 @@ class DemoNode(Node):
         self.timer     = self.create_timer(1/rate, self.update)
         self.get_logger().info("Sending commands with dt of %f seconds (%fHz)" %
                                (self.timer.timer_period_ns * 1e-9, rate))
+
 
     def shutdown(self):
         self.destroy_node()
@@ -154,7 +146,18 @@ class DemoNode(Node):
     # Receive feedback - called repeatedly by incoming messages.
     def recvfbk(self, fbkmsg):
         self.actpos = fbkmsg.position
-        pass
+
+        state = State()
+        state.x_waiting_x = self.x_waiting[0]
+        state.x_waiting_y = self.x_waiting[1]
+        state.x_waiting_z = self.x_waiting[2]
+
+        state.actpos_x = self.actpos[0]
+        state.actpos_y = self.actpos[1]
+        state.actpos_z = self.actpos[2]
+
+        self.state_pub.publish(state)
+
 
 
     def recvpoint(self, pointmsg):
@@ -177,7 +180,7 @@ class DemoNode(Node):
 
 
     def recvpoint_list(self, msg):
-        self.get_logger().info("Received a list of points: %r" % msg.points)
+        # self.get_logger().info("Received a list of points: %r" % msg.points)
         if self.mode is Mode.WAITING:
             self.point_array.points = msg.points[:]
 
@@ -188,6 +191,18 @@ class DemoNode(Node):
                     self.set_mode(Mode.POINTING)
                 else:
                     self.get_logger().info('First point not in safety dome. Ignoring...')
+
+
+    def recv_segment_array(self, msg):
+        self.get_logger().info("Received a list of segments: %r" % msg.segments)
+        if self.mode is Mode.WAITING:
+            self.segments = msg.segments
+
+            self.tcmd = self.t
+            self.pcmd = self.actpos[:]  # use current joint state
+            self.vcmd = [0.0, 0.0, 0.0]
+
+            self.set_mode(Mode.POINTING)
 
 
     def super_smart_goto(self, t, initial_pos, final_pos, cycle):
@@ -249,51 +264,76 @@ class DemoNode(Node):
                 self.set_mode(Mode.WAITING)
 
         elif self.mode is Mode.POINTING:
-            if len(self.segments) == 0 and len(self.point_array.points) > 0:
-                # populate self.segments
+            #     # populate self.segments
 
-                cart_points = [self.x_waiting]
-                for pt in self.point_array.points:
-                    cart_points.append([pt.x, pt.y, pt.z])
-                self.point_array.points = []
+            #     cart_points = [self.x_waiting]
+            #     for pt in self.point_array.points:
+            #         cart_points.append([pt.x, pt.y, pt.z])
+            #     self.point_array.points = []
                 
-                Tmove = CYCLE / 2
+            #     Tmove = CYCLE / 2
 
-                for i in range(len(cart_points) - 1):
-                    p1 = cart_points[i]
-                    p2 = cart_points[i + 1]
+            #     for i in range(len(cart_points) - 1):
+            #         p1 = cart_points[i]
+            #         p2 = cart_points[i + 1]
 
-                    transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.07]
+            #         transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.07]
 
-                    qT = self.newton_raphson(transitional)
-                    q2 = self.newton_raphson(p2)
+            #         qT = self.newton_raphson(transitional)
+            #         q2 = self.newton_raphson(p2)
 
-                    if i == 0:
-                        self.segments.append(Segment(pf=q2, vf=[0.0, 0.0, 0.0], Tmove=Tmove*2))
-                        continue
+            #         if i == 0:
+            #             a_seg = Segment()
+            #             a_seg.px = q2[0]
+            #             a_seg.py = q2[1]
+            #             a_seg.pz = q2[2]
+            #             a_seg.vx = 0.0
+            #             a_seg.vy = 0.0
+            #             a_seg.vz = 0.0
+            #             a_seg.t = Tmove * 2
+            #             self.segment_array.segments.append(a_seg)
+            #             continue
 
-                    dx = (transitional[0] - p1[0])
-                    dy = (transitional[1] - p1[1])
-                    v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
+            #         dx = (transitional[0] - p1[0])
+            #         dy = (transitional[1] - p1[1])
+            #         v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
 
-                    (_, _, Jv, _) = self.chain.fkin(qT)
-                    qdotT = np.linalg.pinv(Jv) @ v_cart
-                    qdotT = qdotT.flatten().tolist()
+            #         (_, _, Jv, _) = self.chain.fkin(qT)
+            #         qdotT = np.linalg.pinv(Jv) @ v_cart
+            #         qdotT = qdotT.flatten().tolist()
 
-                    seg1 = Segment(pf=qT, vf=qdotT, Tmove=Tmove)
-                    seg2 = Segment(pf=q2, vf=[0.0, 0.0, 0.0], Tmove=Tmove)
+            #         seg1 = Segment()
+            #         seg1.px = qT[0]
+            #         seg1.py = qT[1]
+            #         seg1.pz = qT[2]
+            #         seg1.vx = qdotT[0]
+            #         seg1.vy = qdotT[1]
+            #         seg1.vz = qdotT[2]
+            #         seg1.t = Tmove
+            #         # Segment(pf=qT, vf=qdotT, Tmove=Tmove)
+            #         # seg2 = Segment(pf=q2, vf=[0.0, 0.0, 0.0], Tmove=Tmove)
+            #         seg2 = Segment()
+            #         seg2.px = q2[0]
+            #         seg2.py = q2[1]
+            #         seg2.pz = q2[2]
+            #         seg2.vx = 0.0
+            #         seg2.vy = 0.0
+            #         seg2.vz = 0.0
+            #         seg2.t = Tmove
 
-                    self.segments.append(seg1)
-                    self.segments.append(seg2)
+            #         self.segment_array.segments.append(seg1)
+            #         self.segment_array.segments.append(seg2)
 
-                self.segments.append(Segment(pf=WAITING_POS, vf=[0.0, 0.0, 0.0], Tmove=Tmove*2))
+            #     a_seg = Segment()
+            #     a_seg.px = WAITING_POS[0]
+            #     a_seg.py = WAITING_POS[1]
+            #     a_seg.pz = WAITING_POS[2]
+            #     a_seg.vx = 0.0
+            #     a_seg.vy = 0.0
+            #     a_seg.vz = 0.0
+            #     a_seg.t = Tmove * 2
+            #     self.segment_array.segments.append(a_seg)
 
-                self.tcmd = (now - self.starttime).nanoseconds * 1e-9  # self.t
-                self.pcmd = self.actpos[:]  # use current joint state
-                self.vcmd = [0.0, 0.0, 0.0]
-
-                qd = self.qD
-                qddot = self.qddot
 
             if self.spline and ((self.t - self.spline.t0) > self.spline.T or self.abort):
                 self.spline = None
@@ -311,7 +351,7 @@ class DemoNode(Node):
             else:
                 qd, qddot = self.pcmd, [0.0, 0.0, 0.0]
 
-            if self.spline is None and len(self.segments) == 0 and len(self.point_array.points) == 0:
+            if self.spline is None and len(self.segments) == 0:
                 self.get_logger().info("Trajectory complete, switching to WAITING mode.")
                 self.set_mode(Mode.WAITING)
                 self.pointcmd = self.x_waiting
@@ -320,7 +360,16 @@ class DemoNode(Node):
             if abs(dist(self.actpos, qd)) > 0.05:
                 self.spline = None
 
-                self.segments = [Segment(pf=WAITING_POS, vf=[0.0, 0.0, 0.0], Tmove=CYCLE)]
+                a_seg = Segment()
+                a_seg.px = WAITING_POS[0]
+                a_seg.py = WAITING_POS[1]
+                a_seg.pz = WAITING_POS[2]
+                a_seg.vx = 0.0
+                a_seg.vy = 0.0
+                a_seg.vz = 0.0
+                a_seg.t = CYCLE
+                self.segments = [a_seg]
+
                 self.tcmd = (now - self.starttime).nanoseconds * 1e-9
                 self.pcmd = self.actpos[:]
                 self.vcmd = [0.0, 0.0, 0.0]
