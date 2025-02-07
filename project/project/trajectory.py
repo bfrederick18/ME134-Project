@@ -250,11 +250,13 @@ class DemoNode(Node):
 
         elif self.mode is Mode.POINTING:
             if len(self.segments) == 0 and len(self.point_array.points) > 0:
-                cart_points = [self.pointcmd]
+                # populate self.segments
+
+                cart_points = [self.x_waiting]
                 for pt in self.point_array.points:
                     cart_points.append([pt.x, pt.y, pt.z])
-
                 self.point_array.points = []
+                
                 Tmove = CYCLE / 2
 
                 for i in range(len(cart_points) - 1):
