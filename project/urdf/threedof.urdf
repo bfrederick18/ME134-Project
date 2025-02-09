@@ -1,0 +1,173 @@
+<?xml version="1.0"?>
+
+<robot name="threedof">
+
+  <!-- ******************************************************** -->
+  <!-- ******************* Kinematic Chain ******************** -->
+  <!-- ******************************************************** -->
+  <!-- Note the 'origin' tag in the joints defines the shift and
+       reorientation, i.e. the transform.  For moving joints, this
+       happens before the continuous joint rotates around 'axis'. -->
+
+  <!-- World can't take a visual element (at least in Gazebo). -->
+  <link name="world"/>
+
+  <joint name="tableplacement" type="fixed">
+    <parent link="world"/>
+    <child  link="table"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="table">
+    <visual>
+      <origin xyz="0.0 0.0 0.0" rpy="-1.5708 0 0"/>
+      <geometry>
+        <mesh filename="package://threedof/meshes/Table.STL"
+	      scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="wood"/>
+    </visual>
+  </link>
+
+  <joint name="placement" type="fixed">
+    <parent link="table"/>
+    <child  link="baseplate"/>
+    <origin xyz="0.748 0.01 0.0" rpy="0 0 0"/>			<!-- WHERE IS THE BASE -->
+  </joint>
+
+  <!-- BASE PLATE: Shift across the base plate to the base motor. --> 
+  <link name="baseplate">
+    <visual>
+      <origin xyz="0.0 0.025 0.0125" rpy="0 0 0"/>
+      <geometry>
+	<box size="0.2 0.1 0.0230"/>
+      </geometry>
+      <material name="wood"/>
+    </visual>
+  </link>
+
+  <joint name="baseplate" type="fixed">
+    <parent link="baseplate"/>
+    <child  link="basemotor"/>
+    <origin xyz="0 0 0.0230" rpy="0 0 0"/>
+  </joint>
+
+  <!-- BASE MOTOR: Thickness: X5 = 31.1mm, X8 = 45.1mm -->
+  <link name="basemotor">
+    <visual>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://threedof/meshes/X8.stl"
+	      scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="hebi"/>
+    </visual>
+  </link>
+
+  <joint name="base" type="continuous">
+    <parent link="basemotor"/>
+    <child  link="lbracket"/>
+    <origin xyz="0 0.035 0.03321" rpy="0 0 -1.5508"/>
+    <axis   xyz="0 0 1"/>
+  </joint>
+
+  <!-- L BRACKET: Shift and rotate across the L bracket. -->
+  <link name="lbracket">
+    <!-- Add a visual element -->
+  </link>
+
+  <joint name="lbracket" type="fixed">
+    <parent link="lbracket"/>
+    <child  link="shouldermotor"/>
+    <origin xyz="0.005 0.031 0.057" rpy="0 -1.5708 -1.5708"/>	  <!-- L BRACKET DIMENIONS -->
+  </joint>
+
+  <!-- SHOULDER MOTOR: Thickness: X5 = 31.1mm, X8 = 45.1mm -->
+  <link name="shouldermotor">
+    <visual>
+      <origin xyz="0 0 -0.0065" rpy="0 0 3.14159"/>
+      <geometry>
+        <mesh filename="package://threedof/meshes/X5.stl"
+	      scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="hebi"/>
+    </visual>
+  </link>
+
+  <joint name="shoulder" type="continuous">
+    <parent link="shouldermotor"/>
+    <child  link="upperarm"/>
+    <origin xyz="0 0 0.0311" rpy="-3.14159 0 0.02"/>
+    <axis   xyz="0 0 -1"/>
+  </joint>
+
+  <!-- UPPER ARM: Shift across the upper arm (1/4in thickness) -->
+  <link name="upperarm">
+    <visual>
+      <origin xyz="0 0 0.00285" rpy="1.5708 0 0"/>  <!-- 0.25 0 0.00285 -->
+      <geometry>
+	      <mesh filename="package://threedof/meshes/upperarm.stl"
+            scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="wood"/>
+    </visual>
+    <!-- Add a visual element -->
+  </link>
+
+  <joint name="upperarm" type="fixed">
+    <parent link="upperarm"/>
+    <child  link="elbowmotor"/>
+    <origin xyz="0.380 0 0.0057" rpy="3.14159 0 0"/>		  <!-- UPPER ARM DIMENIONS -->
+  </joint>
+
+  <!-- Elbow motor.  Thickness: X5 = 31.1mm, X8 = 45.1mm -->
+  <link name="elbowmotor">
+    <visual>
+      <geometry>
+        <mesh filename="package://threedof/meshes/X5.stl"
+	      scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="hebi"/>
+    </visual>
+  </link>
+
+  <joint name="elbow" type="continuous">
+    <parent link="elbowmotor"/>
+    <child  link="lowerarm"/>
+    <origin xyz="0 0 0.0311" rpy="0 0 0"/>
+    <axis   xyz="0 0 1"/>
+  </joint>
+
+  <!-- Shift across the upper arm (1/4in thickness) -->
+  <link name="lowerarm">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <mesh filename="package://threedof/meshes/pointer.stl"
+            scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="wood"/>
+    </visual>
+  </link>
+
+  <joint name="lowerarm" type="fixed">
+    <parent link="lowerarm"/>
+    <child  link="tip"/>
+    <origin xyz="0.370 0.00285 0.005" rpy="-1.5708 -1.5708 -1.5708"/>		  <!-- LOWER ARM DIMENIONS -->
+  </joint>
+
+  <!-- TIP FRAME -->
+  <link name="tip"/>
+
+  
+  <!-- *************************************************** -->
+  <!-- *************** Visual Link Elements ************** -->
+  <!-- *************************************************** -->
+  <!-- Note collada .dae files have better color/texture   -->
+  <!-- suppport that STL files.                            -->
+
+  <!-- Colors -->
+  <material name="wood">  <color rgba="0.82 0.62 0.04 1"/>  </material>
+  <material name="hebi">  <color rgba="0.82 0.06 0.06 1"/>  </material>
+
+</robot>
