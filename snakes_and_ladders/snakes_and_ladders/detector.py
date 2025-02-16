@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import math
 
 import rclpy
 import cv_bridge
@@ -32,6 +33,28 @@ def detect_die_number(self, frame):
         return(len(circles))
     else:
         return None
+
+def detect_dice_face(self, frame):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Apply Gaussian blur
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # Threshold the image
+    _, thresh = cv2.threshold(blurred, 170, 250, cv2.THRESH_BINARY)
+
+    # Find contours
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    # Filter contours and draw bounding box
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area > 500:  # Adjust area threshold as needed
+            rotatedRectangle = cv2.minAreaRect(contour)
+            ((x, y), (w, h), angle) = cv2.minAreaRect(contour)
+            box = np.int0(cv2.boxPoints(rotatedRectangle))
+            cv2.drawContours(frame, [box], 0, (0, 255, 0), 2)
+            #cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
     
 def average_list(list):
     if not list:
@@ -99,7 +122,8 @@ class DetectorNode(Node):
             if len(self.die_rolls) == 50 and self.counter == 0:
                 self.counter += 1
                 avg_reading = average_list(self.die_rolls)
-                self.get_logger().info("Avg Dice Reading: %s" % avg_reading)
+                round_read = math.ceil(avg_reading)
+                self.get_logger().info("Dice Reading: %s" % round_read)
                 die_roll = detect_die_number(self,frame)
                 self.die_rolls = []
             else:
@@ -109,6 +133,7 @@ class DetectorNode(Node):
             self.die_rolls = []
             self.counter = 0
 
+        detect_dice_face(self, frame)
 
 
         self.pubrgb.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
