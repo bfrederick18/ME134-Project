@@ -7,6 +7,8 @@ Panels:
         - /Global Options1
         - /Grid1/Offset1
         - /RobotModel1/Description Topic1
+        - /TF1
+        - /TF1/Frames1
       Splitter Ratio: 0.5676470398902893
     Tree Height: 546
   - Class: rviz_common/Selection
@@ -81,6 +83,11 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        gripper:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         lbracket:
           Alpha: 1
           Show Axes: false
@@ -136,31 +143,33 @@ Visualization Manager:
       Enabled: true
       Frame Timeout: 15
       Frames:
-        All Enabled: true
+        All Enabled: false
         basemotor:
-          Value: true
+          Value: false
         baseplate:
-          Value: true
+          Value: false
         elbowmotor:
-          Value: true
+          Value: false
+        gripper:
+          Value: false
         lbracket:
-          Value: true
+          Value: false
         lowerarm:
-          Value: true
+          Value: false
         lowerbracket:
-          Value: true
+          Value: false
         shouldermotor:
-          Value: true
+          Value: false
         table:
-          Value: true
+          Value: false
         tip:
           Value: true
         upperarm:
-          Value: true
+          Value: false
         world:
-          Value: true
+          Value: false
         wristmotor:
-          Value: true
+          Value: false
       Marker Scale: 1
       Name: TF
       Show Arrows: true
@@ -178,8 +187,9 @@ Visualization Manager:
                         lowerarm:
                           wristmotor:
                             lowerbracket:
-                              tip:
-                                {}
+                              gripper:
+                                tip:
+                                  {}
       Update Interval: 0
       Value: true
   Enabled: true
@@ -228,25 +238,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.4792687892913818
+      Distance: 0.6712371706962585
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.7226762771606445
-        Y: -0.04371107742190361
-        Z: 0.8915807008743286
+        X: 0.7810291051864624
+        Y: 0.8571064472198486
+        Z: 0.21655583381652832
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.09356161952018738
+      Pitch: 0.11910002678632736
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.379055500030518
+      Yaw: 1.570741057395935
     Saved: ~
 Window Geometry:
   Displays:
@@ -264,5 +274,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1200
-  X: 669
+  X: 670
   Y: 47
