@@ -19,8 +19,8 @@ def detect_die_number(self, frame):
     # Apply Gaussian blur and threshold
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     # Apply Hough Circle Transform
-    circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1, 5,
-                            param1=50, param2=20, minRadius=1, maxRadius=20) #(50, 20)
+    circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 0.5, 4,
+                            param1=30, param2=18, minRadius=1, maxRadius=15) #(50, 20)
 
     # Ensure at least some circles were found
     if circles is not None:

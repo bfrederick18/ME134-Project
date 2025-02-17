@@ -40,7 +40,7 @@ class DemoNode(Node):
 
         # Create a temporary subscriber to grab the initial position.
         self.position0 = self.grabfbk()
-        self.get_logger().info("Initial positions: %r" % self.position0)
+        # self.get_logger().info("Initial positions: %r" % self.position0)
 
         # Create a message and publisher to send the joint commands.
         self.cmdmsg = JointState()
@@ -48,7 +48,7 @@ class DemoNode(Node):
 
         # Wait for a connection to happen.  This isn't necessary, but
         # means we don't start until the rest of the system is ready.
-        self.get_logger().info("Waiting for a /joint_commands subscriber...")
+        # self.get_logger().info("Waiting for a /joint_commands subscriber...")
         while(not self.count_subscribers('/joint_commands')):
             pass
 
@@ -61,8 +61,8 @@ class DemoNode(Node):
         rate           = RATE
         self.starttime = self.get_clock().now()
         self.timer     = self.create_timer(1/rate, self.update)
-        self.get_logger().info("Sending commands with dt of %f seconds (%fHz)" %
-                               (self.timer.timer_period_ns * 1e-9, rate))
+        #self.get_logger().info("Sending commands with dt of %f seconds (%fHz)" %
+                               #(self.timer.timer_period_ns * 1e-9, rate))
         
         self.pointsub = self.create_subscription(
             Point, '/point', self.recvpoint, 10)
@@ -130,19 +130,20 @@ class DemoNode(Node):
         N = 500
 
         for i in range(N+1):
+            #self.get_logger().info("q: %d, %d, %d, %d " % (q[0], q[1], q[2], q[3]))
+            #self.get_logger().info(f"{q}")
             (x, _, Jv, _) = self.chain.fkin(q)
-            # x_stack = np.vstack([np.array(x).reshape(3,1), [0]])
             xdelta = (xgoal - x)
             J = np.vstack([Jv, np.array([0, 1, 1, 1]).reshape(1,4)])
-            # J_stack = np.hstack([J, [[0], [1], [1], [1]]])
             qdelta = np.linalg.inv(J) @ np.vstack([np.array(xdelta).reshape(3,1), np.array([0]).reshape(1,1)])
-            self.get_logger().info("Completed in %d iterations" % qdelta.shape[0])
-            q = q + qdelta * 0.5
+            self.get_logger().info(f"{q}")
+            q = q + qdelta.flatten() * 0.5
+            self.get_logger().info(f"{q}")
             xdistance.append(np.linalg.norm(xdelta))
             qstepsize.append(np.linalg.norm(qdelta))
 
             if np.linalg.norm(x-xgoal) < 1e-12:
-                self.get_logger().info("Completed in %d iterations" % i)
+                #self.get_logger().info("Completed in %d iterations" % i)
                 return q.tolist()
             
         return WAITING_POS
@@ -152,7 +153,7 @@ class DemoNode(Node):
         # Grab the current time.
         now = self.get_clock().now()
         t   = (now - self.starttime).nanoseconds * 1e-9
-        qgoal = self.newton_raphson(self.pointcmd)
+        qgoal = self.newton_raphson([1.36, 0.34, 0.02])
 
         if t < CYCLE:
             qd, qddot = self.super_smart_goto(t, self.position0, WAITING_POS, CYCLE)
