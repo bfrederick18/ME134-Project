@@ -132,19 +132,21 @@ class DemoNode(Node):
         for i in range(N+1):
             #self.get_logger().info("q: %d, %d, %d, %d " % (q[0], q[1], q[2], q[3]))
             #self.get_logger().info(f"{q}")
-            (x, _, Jv, _) = self.chain.fkin(q)
+            (x, _, Jv, _) = self.chain.fkin(q[0:4])
             xdelta = (xgoal - x)
-            J = np.vstack([Jv, np.array([0, 1, 1, 1]).reshape(1,4)])
-            qdelta = np.linalg.inv(J) @ np.vstack([np.array(xdelta).reshape(3,1), np.array([0]).reshape(1,1)])
-            self.get_logger().info(f"{q}")
+            J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
+            #J_primary_task = np.vstack([J, np.array([0,0,0,1]).reshape(1,4)])
+            x_stack = np.vstack([np.array(xdelta).reshape(3,1), np.array([0]).reshape(1,1)])
+            #x_primary_task = np.vstack([x_stack, np.array([0]).reshape(1,1)])
+            qdelta = np.linalg.inv(J) @ x_stack
+            #q = np.vstack([q[0:4], np.array([0]).reshape(1,1)]) + qdelta.flatten() * 0.5
             q = q + qdelta.flatten() * 0.5
-            self.get_logger().info(f"{q}")
             xdistance.append(np.linalg.norm(xdelta))
             qstepsize.append(np.linalg.norm(qdelta))
 
             if np.linalg.norm(x-xgoal) < 1e-12:
                 #self.get_logger().info("Completed in %d iterations" % i)
-                return q.tolist()
+                return q[0:4].tolist()
             
         return WAITING_POS
 
