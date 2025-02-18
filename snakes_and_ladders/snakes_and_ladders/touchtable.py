@@ -126,7 +126,6 @@ class DemoNode(Node):
         
         # Report.
         self.get_logger().info("Running point %r, %r, %r, %r" % (x,y,z,0))
-        self.qgoal = self.newton_raphson([0.505, 0.295, 0.02])
     
     def super_smart_goto(self, t, initial_pos, final_pos, cycle):
         (q, qdot) = goto5(t % cycle, cycle, np.array(initial_pos).reshape(4, 1), np.array(final_pos).reshape(4, 1))
@@ -172,6 +171,8 @@ class DemoNode(Node):
         # Grab the current time.
         now = self.get_clock().now()
         t   = (now - self.starttime).nanoseconds * 1e-9
+
+        self.qgoal = self.newton_raphson([0.505, 0.295, 0.02])
 
         if t < CYCLE:
             qd, qddot = self.super_smart_goto(t, self.position0, WAITING_POS, CYCLE)

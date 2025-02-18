@@ -19,6 +19,12 @@ def board_detector(self, frame):
     # Edge detection
     edges = cv2.Canny(gray, 50, 150)
 
+    # Apply Gaussian blur
+    #blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # Threshold the image
+    #_, thresh = cv2.threshold(blurred, 100, 250, cv2.THRESH_BINARY)
+
     # Find contours (detect grid lines)
     contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -27,11 +33,13 @@ def board_detector(self, frame):
     board_contour = contours[0]  # Largest contour (the board)
 
     # Approximate board shape
-    epsilon = 0.02 * cv2.arcLength(board_contour, True)
-    approx = cv2.approxPolyDP(board_contour, epsilon, True)
+    #epsilon = 0.03 * cv2.arcLength(board_contour, True)
+    #approx = cv2.approxPolyDP(board_contour, epsilon, True)
 
     # Get bounding box of the board
-    x, y, w, h = cv2.boundingRect(approx)
+    x, y, w, h = cv2.boundingRect(board_contour)
+
+    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
     return(x, y, w, h)
     
@@ -91,7 +99,7 @@ class DetectorNode(Node):
         # binary = cv2.dilate(binary, None, iterations=2*iter)
         # binary = cv2.erode(binary, None, iterations=2*iter)
        
-
+        board_detector(self, frame)
 
         self.pubrgb.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
         # self.pub_obj_array.publish(self.object_array)
