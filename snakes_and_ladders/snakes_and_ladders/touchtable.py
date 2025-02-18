@@ -45,6 +45,13 @@ class DemoNode(Node):
         # Create a message and publisher to send the joint commands.
         self.cmdmsg = JointState()
         self.cmdpub = self.create_publisher(JointState, '/joint_commands', 10)
+        
+        #gravity constants
+        self.A = -2.4
+        self.B = 0
+        
+        self.C = -1.6
+        self.D = 0
 
         # Wait for a connection to happen.  This isn't necessary, but
         # means we don't start until the rest of the system is ready.
@@ -67,6 +74,7 @@ class DemoNode(Node):
         self.pointsub = self.create_subscription(
             Point, '/point', self.recvpoint, 10)
         self.pointcmd = [0.0, 0.0, 0.0]
+        self.qgoal = WAITING_POS
 
     # Shutdown
     def shutdown(self):
@@ -118,6 +126,7 @@ class DemoNode(Node):
         
         # Report.
         self.get_logger().info("Running point %r, %r, %r, %r" % (x,y,z,0))
+        self.qgoal = self.newton_raphson([0.505, 0.295, 0.02])
     
     def super_smart_goto(self, t, initial_pos, final_pos, cycle):
         (q, qdot) = goto5(t % cycle, cycle, np.array(initial_pos).reshape(4, 1), np.array(final_pos).reshape(4, 1))
@@ -149,23 +158,32 @@ class DemoNode(Node):
                 return q[0:4].tolist()
             
         return WAITING_POS
+    
+    def gravity(self, pos):
+        theta_el = pos[2]
+        theta_sh = pos[1]
+        tau_elbow = self.C * sin(theta_el - theta_sh) + self.D * cos(theta_el - theta_sh)
+        tau_sh = -1*tau_elbow + self.A*sin(theta_sh) + self.B*cos(theta_sh)
+        self.get_logger().info("Shoulder Torque: %r" % tau_sh)
+        return [0.0, tau_sh, tau_elbow, 0.0]
 
     # Timer (100Hz) update.
     def update(self):
         # Grab the current time.
         now = self.get_clock().now()
         t   = (now - self.starttime).nanoseconds * 1e-9
-        qgoal = self.newton_raphson([1.36, 0.34, 0.02])
 
         if t < CYCLE:
             qd, qddot = self.super_smart_goto(t, self.position0, WAITING_POS, CYCLE)
         elif t < 2*CYCLE:
-            qd, qddot = self.super_smart_goto(t, WAITING_POS, qgoal, CYCLE)
-        else:
-            self.actpos = WAITING_POS
+            qd, qddot = self.super_smart_goto(t, WAITING_POS, self.qgoal, CYCLE)
+        elif t < 3*CYCLE:
+            qd, qddot = self.super_smart_goto(t, self.qgoal, WAITING_POS, CYCLE)
 
         # Compute the trajectory.
-        tau   = [0.0, 0.0, 0.0, 0.0]
+        # qd = []
+        # qddot = []
+        tau = self.gravity(self.actpos)
 
         # Send.
         self.sendcmd(qd, qddot, tau)

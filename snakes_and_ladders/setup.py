@@ -32,8 +32,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-        'detector = snakes_and_ladders.detector:main',
-        'touchtable = snakes_and_ladders.touchtable:main'
+        'dice_detector = snakes_and_ladders.dice_detector:main',
+        'touchtable = snakes_and_ladders.touchtable:main',
+        'board_detector = snakes_and_ladders.board_detector:main'
         ],
     },
 )

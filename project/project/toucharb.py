@@ -140,7 +140,7 @@ class DemoNode(Node):
 
     def gravity(self, pos):
         theta_sh = pos[1]
-        tau_shoulder = self.A * sin(theta_sh) + self.B * cos(theta_sh) - 0.1
+        tau_shoulder = self.A * sin(theta_sh) + self.B * cos(theta_sh) 
         return [0.0, tau_shoulder, 0.0]
     
     

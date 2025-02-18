@@ -40,9 +40,9 @@ def generate_launch_description():
 
     # Configure the ball detector node
     node_detector = Node(
-        name       = 'detector', 
+        name       = 'board_detector', 
         package    = 'snakes_and_ladders',
-        executable = 'detector',
+        executable = 'board_detector',
         output     = 'screen',
         remappings = [('/image_raw', '/usb_cam/image_raw')])
 
