@@ -8,8 +8,7 @@ import cv_bridge
 from rclpy.node         import Node
 from sensor_msgs.msg    import Image
 
-from project_msgs.msg import Object, ObjectArray
-
+from std_msgs.msg import Int16
 
 
 def detect_die_number(self, frame):
@@ -88,6 +87,7 @@ class DetectorNode(Node):
 
         self.bridge = cv_bridge.CvBridge()
 
+        self.pub_roll = self.create_publisher(Int16, name + '/int16', 1)
 
         self.sub = self.create_subscription(
             Image, '/image_raw', self.process, 1)
@@ -126,6 +126,7 @@ class DetectorNode(Node):
                 self.get_logger().info("Dice Reading: %s" % round_read)
                 die_roll = detect_die_number(self,frame)
                 self.die_rolls = []
+                #self.pub_roll.publish(die_roll)
             else:
                 pass
         else:

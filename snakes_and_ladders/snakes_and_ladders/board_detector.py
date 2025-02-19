@@ -37,11 +37,12 @@ def board_detector(self, frame):
     #approx = cv2.approxPolyDP(board_contour, epsilon, True)
 
     # Get bounding box of the board
-    x, y, w, h = cv2.boundingRect(board_contour)
+    rotated_rectangle = cv2.minAreaRect(board_contour)
+    ((um, vm), (wm,  hm), angle) = cv2.minAreaRect(board_contour)
+    box = np.int0(cv2.boxPoints(rotated_rectangle))
+    cv2.drawContours(frame, [box], 0, (0, 255, 0), 2)
 
-    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-    return(x, y, w, h)
+    return(um, vm, wm, hm)
     
 def average_list(list):
     if not list:
