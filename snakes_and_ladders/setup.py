@@ -35,7 +35,8 @@ setup(
         'dice_detector = snakes_and_ladders.dice_detector:main',
         'touchtable = snakes_and_ladders.touchtable:main',
         'board_detector = snakes_and_ladders.board_detector:main',
-        'brain = snakes_and_ladders.brain:main'
+        'brain = snakes_and_ladders.brain:main',
+        'trajectory = snakes_and_ladders.trajectory:main'
         ],
     },
 )

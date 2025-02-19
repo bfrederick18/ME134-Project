@@ -71,9 +71,9 @@ def generate_launch_description():
 
     # Configure a trajectory node.  PLACEHOLDER FOR YOUR CODE!!
     node_trajectory = Node(
-        name       = 'touchtable', 
+        name       = 'trajectory', 
         package    = 'snakes_and_ladders',
-        executable = 'touchtable',
+        executable = 'trajectory',
         output     = 'screen')
 
 

@@ -19,22 +19,12 @@ def board_detector(self, frame):
     # Edge detection
     edges = cv2.Canny(gray, 50, 150)
 
-    # Apply Gaussian blur
-    #blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-
-    # Threshold the image
-    #_, thresh = cv2.threshold(blurred, 100, 250, cv2.THRESH_BINARY)
-
     # Find contours (detect grid lines)
     contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     # Sort and find the largest contour (assumed to be the board)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
     board_contour = contours[0]  # Largest contour (the board)
-
-    # Approximate board shape
-    #epsilon = 0.03 * cv2.arcLength(board_contour, True)
-    #approx = cv2.approxPolyDP(board_contour, epsilon, True)
 
     # Get bounding box of the board
     rotated_rectangle = cv2.minAreaRect(board_contour)
@@ -60,7 +50,7 @@ class DetectorNode(Node):
     def __init__(self, name):
         super().__init__(name)
 
-        #self.hsvlimits = np.array([[10, 40], [60, 220], [125, 255]])
+        self.hsvlimits = np.array([[10, 40], [60, 220], [125, 255]])
         
         # Assume the center of marker sheet is at the world origin.
         self.x0 = 0.664
