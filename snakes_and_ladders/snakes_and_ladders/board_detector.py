@@ -50,13 +50,16 @@ class DetectorNode(Node):
     def __init__(self, name):
         super().__init__(name)
 
-        self.hsvlimits = np.array([[10, 40], [60, 220], [125, 255]])
+        self.hsvlimits = np.array([[100, 130], [100, 130], [70, 110]])
         
         # Assume the center of marker sheet is at the world origin.
         self.x0 = 0.664
         self.y0 = 0.455
 
         self.pubrgb = self.create_publisher(Image, name +'/image_raw', 3)
+
+        self.pub_obj_array = self.create_publisher(ObjectArray, name + '/object_array', 1)
+        self.object_array = ObjectArray()
         
         self.get_logger().info("Name: %s" % name)
 
@@ -76,24 +79,56 @@ class DetectorNode(Node):
         assert(msg.encoding == "rgb8")
         frame = self.bridge.imgmsg_to_cv2(msg, "passthrough")
 
-        # hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+        hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
 
-        # binary = cv2.inRange(hsv, self.hsvlimits[:,0], self.hsvlimits[:,1])
-        
-        # (H, W, D) = frame.shape
-        # uc = W//2
-        # vc = H//2
+        binary = cv2.inRange(hsv, self.hsvlimits[:,0], self.hsvlimits[:,1])
 
+        (H, W, D) = frame.shape
+        uc = W//2
+        vc = H//2
 
-        # iter = 2
-        # binary = cv2.erode(binary, None, iterations=2*iter)
-        # binary = cv2.dilate(binary, None, iterations=2*iter)
-        # binary = cv2.erode(binary, None, iterations=2*iter)
-       
+        # # Help to determine the HSV range...
+        # if True:
+        #     # Draw the center lines.  Note the row is the first dimension.
+        #     frame = cv2.line(frame, (uc,0), (uc,H-1), self.white, 1)
+        #     frame = cv2.line(frame, (0,vc), (W-1,vc), self.white, 1)
+
+        #     # Report the center HSV values.  Note the row comes first.
+        #     self.get_logger().info(
+        #         "HSV = (%3d, %3d, %3d)" % tuple(hsv[vc, uc]))
+
+        iter = 2
+        binary = cv2.erode(binary, None, iterations=iter)
+        binary = cv2.dilate(binary, None, iterations=2*iter)
+        binary = cv2.erode(binary, None, iterations=iter)
+
+        (contours, hierarchy) = cv2.findContours(
+            binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        cv2.drawContours(frame, contours, -1, self.blue, 1)
+
+        if len(contours) > 0:
+            for contour in sorted(contours, key=cv2.contourArea, reverse=True):
+                ((ur, vr), radius) = cv2.minEnclosingCircle(contour)
+                ur     = int(ur)
+                vr     = int(vr)
+                radius = int(radius)
+
+                try:
+                    ellipse = cv2.fitEllipse(contour)
+                    ((ue, ve), (we, he), angle) = ellipse
+                except Exception as e:
+                    self.get_logger().info("Exception: %s" % str(e))
+                    ellipse = None
+
+                if ellipse is not None:
+                    cv2.ellipse(frame, ellipse, self.green, 1)
+                    #cv2.circle(frame, (int(ue), int(ve)), 5, self.red, -1)
+
         board_detector(self, frame)
 
         self.pubrgb.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
-        # self.pub_obj_array.publish(self.object_array)
+        self.pub_obj_array.publish(self.object_array)
         #self.pubbin.publish(self.bridge.cv2_to_imgmsg(binary))
 
 

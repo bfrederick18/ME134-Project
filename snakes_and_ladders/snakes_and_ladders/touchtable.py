@@ -167,7 +167,7 @@ class DemoNode(Node):
         now = self.get_clock().now()
         t   = (now - self.starttime).nanoseconds * 1e-9
 
-        self.qgoal = self.newton_raphson([0.0,0.0, 0.0])
+        self.qgoal = self.newton_raphson([0.54,0.26, 0.02])
 
         if t < CYCLE:
             qd, qddot = self.super_smart_goto(t, self.position0, WAITING_POS, CYCLE)

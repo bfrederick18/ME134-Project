@@ -155,7 +155,6 @@ class DemoNode(Node):
         state.x_waiting_x = self.x_waiting[0]
         state.x_waiting_y = self.x_waiting[1]
         state.x_waiting_z = self.x_waiting[2]
-        state.x_waiting_w = self.x_waiting[3]
 
         state.actpos_x = self.actpos[0]
         state.actpos_y = self.actpos[1]
@@ -166,7 +165,7 @@ class DemoNode(Node):
 
 
     def recv_segment_array(self, msg):
-        self.get_logger().info("Received a list of segments: %r" % msg.segments)
+        #self.get_logger().info("Received a list of segments: %r" % msg.segments)
         if self.mode is Mode.WAITING:
             self.segments = msg.segments
 
