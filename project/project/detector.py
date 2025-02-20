@@ -26,8 +26,10 @@ class DetectorNode(Node):
         self.hsvlimits = np.array([[10, 40], [60, 220], [125, 255]])
 
         # Assume the center of marker sheet is at the world origin.
-        self.x0 = 0.664
-        self.y0 = 0.455
+        #self.x0 = 0.664
+        #self.y0 = 0.455
+        self.x0 = 0.203
+        self.y0 = 0.504
 
         self.pubrgb = self.create_publisher(Image, name +'/image_raw', 3)
         self.pubbin = self.create_publisher(Image, name +'/binary',    3)

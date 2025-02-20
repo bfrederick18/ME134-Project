@@ -75,7 +75,7 @@ class DemoNode(Node):
         self.t = 0
         self.t_start = 0
         (ptip, _, _, _) = self.chain.fkin(WAITING_POS)
-        self.get_logger().info("Received a list of segments: %r" % ptip)
+        #self.get_logger().info("Received a list of segments: %r" % ptip)
         self.x_waiting = ptip
         self.qD = WAITING_POS
         self.xD = ptip
@@ -165,7 +165,7 @@ class DemoNode(Node):
 
 
     def recv_segment_array(self, msg):
-        #self.get_logger().info("Received a list of segments: %r" % msg.segments)
+        self.get_logger().info("Received a list of segments: %r" % msg.segments)
         if self.mode is Mode.WAITING:
             self.segments = msg.segments
 

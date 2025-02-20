@@ -53,8 +53,8 @@ class DetectorNode(Node):
         self.hsvlimits = np.array([[100, 130], [100, 130], [70, 110]])
         
         # Assume the center of marker sheet is at the world origin.
-        self.x0 = 0.664
-        self.y0 = 0.455
+        self.x0 = 0.231
+        self.y0 = 0.504
 
         self.pubrgb = self.create_publisher(Image, name +'/image_raw', 3)
 
@@ -72,9 +72,56 @@ class DetectorNode(Node):
     def shutdown(self):
         self.destroy_node()
 
+    def pixelToWorld(self, image, u, v, x0, y0, annotateImage=True):
+        '''
+        Convert the (u,v) pixel position into (x,y) world coordinates
+        Inputs:
+          image: The image as seen by the camera
+          u:     The horizontal (column) pixel coordinate
+          v:     The vertical (row) pixel coordinate
+          x0:    The x world coordinate in the center of the marker paper
+          y0:    The y world coordinate in the center of the marker paper
+          annotateImage: Annotate the image with the marker information
 
+        Outputs:
+          point: The (x,y) world coordinates matching (u,v), or None
+
+        Return None for the point if not all the Aruco markers are detected
+        '''
+
+        markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
+            image, cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
+        if annotateImage:
+            cv2.aruco.drawDetectedMarkers(image, markerCorners, markerIds)
+
+        if (markerIds is None or len(markerIds) != 4 or
+            set(markerIds.flatten()) != set([1,2,3,4])):
+            return None
+
+        uvMarkers = np.zeros((4,2), dtype='float32')
+        for i in range(4):
+            uvMarkers[markerIds[i]-1,:] = np.mean(markerCorners[i], axis=1)
+
+        DX = 0.1016
+        DY = 0.06985
+        xyMarkers = np.float32([[x0+dx, y0+dy] for (dx, dy) in
+                                [(-DX, DY), (DX, DY), (-DX, -DY), (DX, -DY)]])
+
+        M = cv2.getPerspectiveTransform(uvMarkers, xyMarkers)
+
+        uvObj = np.float32([u, v])
+        xyObj = cv2.perspectiveTransform(uvObj.reshape(1,1,2), M).reshape(2)
+
+        if annotateImage:
+            s = "(%7.4f, %7.4f)" % (xyObj[0], xyObj[1])
+            cv2.putText(image, s, (u-80, v-8), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (255, 0, 0), 2, cv2.LINE_AA)
+
+        return xyObj
         
     def process(self, msg):
+
+        self.object_array.objects = []
 
         assert(msg.encoding == "rgb8")
         frame = self.bridge.imgmsg_to_cv2(msg, "passthrough")
@@ -82,10 +129,6 @@ class DetectorNode(Node):
         hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
 
         binary = cv2.inRange(hsv, self.hsvlimits[:,0], self.hsvlimits[:,1])
-
-        (H, W, D) = frame.shape
-        uc = W//2
-        vc = H//2
 
         # # Help to determine the HSV range...
         # if True:
@@ -118,14 +161,26 @@ class DetectorNode(Node):
                     ellipse = cv2.fitEllipse(contour)
                     ((ue, ve), (we, he), angle) = ellipse
                 except Exception as e:
-                    self.get_logger().info("Exception: %s" % str(e))
+                    #self.get_logger().info("Exception: %s" % str(e))
                     ellipse = None
 
                 if ellipse is not None:
                     cv2.ellipse(frame, ellipse, self.green, 1)
                     #cv2.circle(frame, (int(ue), int(ve)), 5, self.red, -1)
+                    disk_world = self.pixelToWorld(frame, int(ue), int(ve), self.x0, self.y0, annotateImage=False)
+                    if disk_world is not None:
+                        disk_world_x, disk_world_y = disk_world
+                        self.get_logger().info("Name: (%s, %s)" % (disk_world_x, disk_world_y))
+                        obj_disk = Object()
+                        obj_disk.type = Object.DISK
+                        obj_disk.x = float(disk_world_x)
+                        obj_disk.y = float(disk_world_y)
+                        obj_disk.z = 0.0
+                        obj_disk.theta = 0.0
+                        
+                        self.object_array.objects.append(obj_disk)
 
-        board_detector(self, frame)
+        #board_detector(self, frame)
 
         self.pubrgb.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
         self.pub_obj_array.publish(self.object_array)

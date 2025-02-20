@@ -72,7 +72,7 @@ class DemoNode(Node):
             qstepsize.append(np.linalg.norm(qdelta))
 
             if np.linalg.norm(x-xgoal) < 1e-12:
-                self.get_logger().info("Completed in %d iterations" % i)
+                #self.get_logger().info("Completed in %d iterations" % i)
                 return q.tolist()
             
         return WAITING_POS
@@ -83,18 +83,18 @@ class DemoNode(Node):
         self.actpos = [msg.actpos_x, msg.actpos_y, msg.actpos_z, msg.actpos_w]
 
     def recv_obj_array(self, msg):
-        # self.object_array.objects = []
+        self.object_array.objects = []
 
-        # for obj in msg.objects:
-        #     self.object_array.objects.append(obj)
+        for obj in msg.objects:
+            self.object_array.objects.append(obj)
 
-        # for obj in self.object_array.objects:
-        #     if obj.type == Object.DISK:
-        #         disc_world_msg = Point()
-        #         disc_world_msg.x = obj.x
-        #         disc_world_msg.y = obj.y
-        #         disc_world_msg.z = 0.012
-        #         self.point_array.append(disc_world_msg)
+        for obj in self.object_array.objects:
+            if obj.type == Object.DISK:
+                disc_world_msg = Point()
+                disc_world_msg.x = obj.x
+                disc_world_msg.y = obj.y
+                disc_world_msg.z = 0.012
+                self.point_array.append(disc_world_msg)
             
         #     elif obj.type == Object.STRIP:
         #         strip_world_start_msg = Point()
@@ -109,19 +109,19 @@ class DemoNode(Node):
         #         self.point_array.append(strip_world_start_msg)
         #         self.point_array.append(strip_world_end_msg)
 
-        point1 = Point()
-        point1.x = 0.54
-        point1.y = 0.26
-        point1.z = 0.02
-        self.point_array.append(point1)
+        # point1 = Point()
+        # point1.x = 0.54
+        # point1.y = 0.26
+        # point1.z = 0.02
+        # self.point_array.append(point1)
 
-        point2 = Point()
-        point2.x = 0.64
-        point2.y = 0.26
-        point2.z = 0.02
-        self.point_array.append(point2)
+        # point2 = Point()
+        # point2.x = 0.64
+        # point2.y = 0.26
+        # point2.z = 0.02
+        # self.point_array.append(point2)
 
-        self.get_logger().info('All segs: %s' % len(self.point_array))
+        self.get_logger().info('Objects: %s' % len(self.point_array))
 
         if len(self.point_array) > 0 and self.x_waiting != []:
         #     self.pub_points.publish(self.point_array)
