@@ -11,6 +11,7 @@ from sensor_msgs.msg    import Image
 
 from project_msgs.msg import Object, ObjectArray
 
+from snakes_and_ladders.constants import HSV_LIMITS_PURPLE
 
 
 def board_detector(self, frame):
@@ -35,6 +36,7 @@ def board_detector(self, frame):
 
     return(um, vm, wm, hm)
     
+
 def average_list(list):
     if not list:
         return 0
@@ -50,33 +52,28 @@ class DetectorNode(Node):
 
     def __init__(self, name):
         super().__init__(name)
-
-        self.hsvlimits = np.array([[100, 130], [100, 130], [70, 110]])
+        self.get_logger().info("Name: %s" % name)
         
         # Assume the center of marker sheet is at the world origin.
         self.x0 = 0.6285
         self.y0 = 0.379
-        # self.x0 = 0.5805
-        # self.y0 = 0.332
-        # + an additional 4.8cm in x
-        # and an additional 4.7cm in y
-
-        self.pubrgb = self.create_publisher(Image, name +'/image_raw', 3)
+        # self.x0 = 0.5805  # + an additional 4.8cm in x
+        # self.y0 = 0.3320   # and an additional 4.7cm in y
+        
+        self.pub_rgb = self.create_publisher(Image, name +'/image_raw', 3)
+        self.pub_binary = self.create_publisher(Image, name +'/binary', 3)
 
         self.pub_obj_array = self.create_publisher(ObjectArray, name + '/object_array', 1)
         self.object_array = ObjectArray()
-        
-        self.get_logger().info("Name: %s" % name)
 
         self.bridge = cv_bridge.CvBridge()
 
         self.initial_positions = {}
-
         self.M = None
-
 
         self.sub = self.create_subscription(
             Image, '/image_raw', self.process, 1)
+
 
     def shutdown(self):
         self.destroy_node()
@@ -119,21 +116,19 @@ class DetectorNode(Node):
         DX = 1.161/2
         DY = 0.664/2
         xyMarkers = np.float32([
-            [x0 - DX, y0 + DY],  # Top-left
-            [x0 + DX, y0 + DY],  # Top-right
-            [x0 - DX, y0 - DY],  # Bottom-left
-            [x0 + DX, y0 - DY]   # Bottom-right
+            [x0 - DX, y0 + DY],  # Top left
+            [x0 + DX, y0 + DY],  # Top right
+            [x0 - DX, y0 - DY],  # Bottom left
+            [x0 + DX, y0 - DY]   # Bottom right
         ])       
 
-        M = cv2.getPerspectiveTransform(uvMarkers, xyMarkers)
-        self.M = M    
-        self.get_logger().info('M type: %s' % type(M))
-        return M  # added this back because to use as a successful calibration flag
+        self.M = cv2.getPerspectiveTransform(uvMarkers, xyMarkers)
+        return self.M  # added this back because to use as a successful calibration flag
     
 
     def pixelToWorld(self, u, v, M):
         uvObj = np.float32([u, v])
-        xyObj = cv2.perspectiveTransform(uvObj.reshape(1,1,2), M).reshape(2)
+        xyObj = cv2.perspectiveTransform(uvObj.reshape(1, 1, 2), M).reshape(2)
 
         # if annotateImage:
         #     s = "(%7.4f, %7.4f)" % (xyObj[0], xyObj[1])
@@ -145,15 +140,14 @@ class DetectorNode(Node):
     def process(self, msg):
         self.object_array.objects = []
 
-        assert(msg.encoding == "rgb8")
-        frame = self.bridge.imgmsg_to_cv2(msg, "passthrough")
+        assert(msg.encoding == 'rgb8')
+        frame = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
 
-        hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
-
-        binary = cv2.inRange(hsv, self.hsvlimits[:,0], self.hsvlimits[:,1])
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        binary = cv2.inRange(hsv, HSV_LIMITS_PURPLE[:, 0], HSV_LIMITS_PURPLE[:, 1])
 
         if type(self.calibrate(frame, self.x0, self.y0, annotateImage=True)) is not np.ndarray:
-            self.get_logger().info("Calibration failed")
+            self.get_logger().info('Calibration failed')
             return
 
         # # Help to determine the HSV range...
@@ -192,11 +186,11 @@ class DetectorNode(Node):
 
                 if ellipse is not None:
                     cv2.ellipse(frame, ellipse, self.green, 1)
-                    #cv2.circle(frame, (int(ue), int(ve)), 5, self.red, -1)
+                    # cv2.circle(frame, (int(ue), int(ve)), 5, self.red, -1)
                     disk_world = self.pixelToWorld(int(ue), int(ve), self.M)
                     if disk_world is not None:
                         disk_world_x, disk_world_y = disk_world
-                        self.get_logger().info("Piece Location: (%s, %s)" % (disk_world_x, disk_world_y))
+                        self.get_logger().info('Piece Location: (%s, %s)' % (disk_world_x, disk_world_y))
                         obj_disk = Object()
                         obj_disk.type = Object.DISK
                         obj_disk.x = float(disk_world_x)
@@ -208,9 +202,19 @@ class DetectorNode(Node):
 
         board_detector(self, frame)
 
-        self.pubrgb.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
+
+        (H, W, D) = frame.shape
+        uc = W//2
+        vc = H//2
+        frame = cv2.line(frame, (uc,0), (uc,H-1), (255, 255, 255), 1)
+        frame = cv2.line(frame, (0,vc), (W-1,vc), (255, 255, 255), 1)
+        self.get_logger().info(
+            "Center pixel HSV = (%3d, %3d, %3d)" % tuple(hsv[vc, uc]))
+
+
+        self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
+        self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))
         self.pub_obj_array.publish(self.object_array)
-        #self.pubbin.publish(self.bridge.cv2_to_imgmsg(binary))
 
 
 def main(args=None):
@@ -221,5 +225,5 @@ def main(args=None):
     rclpy.shutdown()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
