@@ -7,7 +7,6 @@ import cv_bridge
 
 from rclpy.node         import Node
 from sensor_msgs.msg    import Image
-
 from std_msgs.msg import Int16
 
 
@@ -33,6 +32,7 @@ def detect_die_number(self, frame):
     else:
         return None
 
+
 def detect_dice_face(self, frame):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -55,6 +55,7 @@ def detect_dice_face(self, frame):
             cv2.drawContours(frame, [box], 0, (0, 255, 0), 2)
             #cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
     
+
 def average_list(list):
     if not list:
         return 0
@@ -92,13 +93,12 @@ class DetectorNode(Node):
         self.sub = self.create_subscription(
             Image, '/image_raw', self.process, 1)
 
+
     def shutdown(self):
         self.destroy_node()
 
-
         
     def process(self, msg):
-
         assert(msg.encoding == "rgb8")
         frame = self.bridge.imgmsg_to_cv2(msg, "passthrough")
 
@@ -109,7 +109,6 @@ class DetectorNode(Node):
         # (H, W, D) = frame.shape
         # uc = W//2
         # vc = H//2
-
 
         # iter = 2
         # binary = cv2.erode(binary, None, iterations=2*iter)
@@ -135,7 +134,6 @@ class DetectorNode(Node):
             self.counter = 0
 
         detect_dice_face(self, frame)
-
 
         self.pubrgb.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
         # self.pub_obj_array.publish(self.object_array)

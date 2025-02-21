@@ -104,8 +104,7 @@ class DetectorNode(Node):
         if annotateImage:
             cv2.aruco.drawDetectedMarkers(image, markerCorners, markerIds)
 
-        if (markerIds is None or len(markerIds) != 4 or
-            set(markerIds.flatten()) != set([1,2,3,4])):
+        if (markerIds is None or len(markerIds) != 4 or set(markerIds.flatten()) != set([1,2,3,4])):
             self.get_logger().info("this sucks")
             return None
         
@@ -117,7 +116,6 @@ class DetectorNode(Node):
         for i in range(4):
             uvMarkers[markerIds[i]-1,:] = np.mean(markerCorners[i], axis=1)
 
-    
         DX = 1.161/2
         DY = 0.664/2
         xyMarkers = np.float32([
@@ -128,11 +126,11 @@ class DetectorNode(Node):
         ])       
 
         M = cv2.getPerspectiveTransform(uvMarkers, xyMarkers)
-
-        self.M = M
-
-        return M
+        self.M = M    
+        self.get_logger().info('M type: %s' % type(M))
+        return M  # added this back because to use as a successful calibration flag
     
+
     def pixelToWorld(self, u, v, M):
         uvObj = np.float32([u, v])
         xyObj = cv2.perspectiveTransform(uvObj.reshape(1,1,2), M).reshape(2)
@@ -141,9 +139,9 @@ class DetectorNode(Node):
         #     s = "(%7.4f, %7.4f)" % (xyObj[0], xyObj[1])
         #     cv2.putText(image, s, (u-80, v-8), cv2.FONT_HERSHEY_SIMPLEX,
         #                 0.5, (255, 0, 0), 2, cv2.LINE_AA)
-
         return xyObj
     
+
     def process(self, msg):
         self.object_array.objects = []
 
@@ -154,7 +152,9 @@ class DetectorNode(Node):
 
         binary = cv2.inRange(hsv, self.hsvlimits[:,0], self.hsvlimits[:,1])
 
-        self.calibrate(frame, self.x0, self.y0, annotateImage=True)
+        if type(self.calibrate(frame, self.x0, self.y0, annotateImage=True)) is not np.ndarray:
+            self.get_logger().info("Calibration failed")
+            return
 
         # # Help to determine the HSV range...
         # if True:

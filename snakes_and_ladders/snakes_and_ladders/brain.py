@@ -11,19 +11,14 @@ from geometry_msgs.msg import Point
 from project_msgs.msg import Object, ObjectArray, PointArray, Segment, SegmentArray, State
 
 from hw6sols.KinematicChainSol import KinematicChain
-
-
-CYCLE = 3 * pi / 2
-WAITING_POS = [0.0, 0.0, -pi / 2, 0.0]
-joint_names = ["base", "shoulder", "elbow", "wrist"]
-
+from snakes_and_ladders.constants import CYCLE, JOINT_NAMES, WAITING_POS
 
 
 class DemoNode(Node):
     def __init__(self, name):
         super().__init__(name)
 
-        self.chain = KinematicChain(self, 'world', 'tip', joint_names)
+        self.chain = KinematicChain(self, 'world', 'tip', JOINT_NAMES)
 
         self.object_array = ObjectArray()
         self.object_array.objects = []
@@ -82,6 +77,7 @@ class DemoNode(Node):
         self.x_waiting = [msg.x_waiting_x, msg.x_waiting_y, msg.x_waiting_z]
         self.actpos = [msg.actpos_x, msg.actpos_y, msg.actpos_z, msg.actpos_w]
 
+
     def recv_obj_array(self, msg):
         self.object_array.objects = []
 
@@ -134,7 +130,6 @@ class DemoNode(Node):
                 cart_points.append([pt.x, pt.y, pt.z])
             self.point_array = []
 
-            
             Tmove = CYCLE / 2
 
             for i in range(len(cart_points) - 1):
@@ -148,14 +143,8 @@ class DemoNode(Node):
 
                 if i == 0:
                     a_seg = Segment()
-                    a_seg.px = q2[0]
-                    a_seg.py = q2[1]
-                    a_seg.pz = q2[2]
-                    a_seg.pw = q2[3]
-                    a_seg.vx = 0.0
-                    a_seg.vy = 0.0
-                    a_seg.vz = 0.0
-                    a_seg.vw = 0.0
+                    a_seg.p = q2
+                    a_seg.v = [0.0, 0.0, 0.0, 0.0]
                     a_seg.t = Tmove * 2
                     self.segment_array.segments.append(a_seg)
                     continue
@@ -171,38 +160,21 @@ class DemoNode(Node):
                 qdotT = qdotT.flatten().tolist()
 
                 seg1 = Segment()
-                seg1.px = qT[0]
-                seg1.py = qT[1]
-                seg1.pz = qT[2]
-                seg1.pw = qT[3]
-                seg1.vx = qdotT[0]
-                seg1.vy = qdotT[1]
-                seg1.vz = qdotT[2]
-                seg1.vw = qdotT[3]
+                seg1.p = qT
+                seg1.v = qdotT
                 seg1.t = Tmove
-                # Segment(pf=qT, vf=qdotT, Tmove=Tmove)
-                # seg2 = Segment(pf=q2, vf=[0.0, 0.0, 0.0], Tmove=Tmove)
+                
                 seg2 = Segment()
-                seg2.px = q2[0]
-                seg2.py = q2[1]
-                seg2.pz = q2[2]
-                seg2.pw = q2[3]
-                seg2.vx = 0.0
-                seg2.vy = 0.0
-                seg2.vz = 0.0
-                seg2.vw = 0.0
+                seg2.p = q2
+                seg2.v = [0.0, 0.0, 0.0, 0.0]
                 seg2.t = Tmove
 
                 self.segment_array.segments.append(seg1)
                 self.segment_array.segments.append(seg2)
 
             a_seg = Segment()
-            a_seg.px = WAITING_POS[0]
-            a_seg.py = WAITING_POS[1]   
-            a_seg.pz = WAITING_POS[2]
-            a_seg.vx = 0.0
-            a_seg.vy = 0.0
-            a_seg.vz = 0.0
+            a_seg.p = WAITING_POS
+            a_seg.v = [0.0, 0.0, 0.0, 0.0]
             a_seg.t = Tmove * 2
             self.segment_array.segments.append(a_seg)
 

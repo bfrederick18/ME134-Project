@@ -10,12 +10,7 @@ from project_msgs.msg import PointArray, Segment, SegmentArray, State
 
 from hw5code.TrajectoryUtils import goto, spline, goto5, spline5
 from hw6sols.KinematicChainSol import KinematicChain
-
-
-RATE = 100.0  # Hertz
-CYCLE = 2 * pi
-WAITING_POS = [0.0, 0.0, -pi / 2, 0.0]
-JOINT_NAMES = ['base', 'shoulder', 'elbow', 'wrist']
+from snakes_and_ladders.constants import CYCLE, JOINT_NAMES, TRAJ_RATE, WAITING_POS
 
 
 class Mode(Enum):
@@ -38,8 +33,8 @@ class Spline():
         # Pre-compute the parameters.
         p0 = np.array(pcmd)
         v0 = np.array(vcmd)
-        pf = np.array([segment.px, segment.py, segment.pz, segment.pw])
-        vf = np.array([segment.vx, segment.vy, segment.vz, segment.vw])
+        pf = np.array(segment.p)
+        vf = np.array(segment.v)
         T = self.T
 
         self.a = p0
@@ -85,9 +80,9 @@ class DemoNode(Node):
         self.pointcmd = self.x_waiting
         self.actpos = self.position0.copy()
 
-        self.A = -2.4
+        self.A = -3.3
         self.B = 0
-        self.C = -1.6
+        self.C = -2.8
         self.D = 0
 
         self.cmdmsg = JointState()
@@ -112,7 +107,7 @@ class DemoNode(Node):
         self.pcmd = WAITING_POS[:]
         self.vcmd = [0.0, 0.0, 0.0, 0.0]
 
-        rate           = RATE
+        rate           = TRAJ_RATE
         self.starttime = self.get_clock().now()
         self.timer     = self.create_timer(1/rate, self.update)
         self.get_logger().info("Sending commands with dt of %f seconds (%fHz)" %
@@ -248,12 +243,8 @@ class DemoNode(Node):
                 self.spline = None
 
                 a_seg = Segment()
-                a_seg.px = WAITING_POS[0]
-                a_seg.py = WAITING_POS[1]
-                a_seg.pz = WAITING_POS[2]
-                a_seg.vx = 0.0
-                a_seg.vy = 0.0
-                a_seg.vz = 0.0
+                a_seg.p = WAITING_POS
+                a_seg.v = [0.0, 0.0, 0.0, 0.0]
                 a_seg.t = CYCLE
                 self.segments = [a_seg]
 
