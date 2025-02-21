@@ -13,7 +13,7 @@ from hw6sols.KinematicChainSol import KinematicChain
 
 
 RATE = 100.0  # Hertz
-CYCLE = 3 * pi / 2
+CYCLE = 2 * pi
 WAITING_POS = [0.0, 0.0, -pi / 2, 0.0]
 JOINT_NAMES = ['base', 'shoulder', 'elbow', 'wrist']
 
@@ -165,7 +165,7 @@ class DemoNode(Node):
 
 
     def recv_segment_array(self, msg):
-        self.get_logger().info("Received a list of segments: %r" % msg.segments)
+        self.get_logger().info('Received a list of segments: %r' % msg.segments)
         if self.mode is Mode.WAITING:
             self.segments = msg.segments
 
@@ -195,7 +195,7 @@ class DemoNode(Node):
         theta_el = pos[2]
         theta_sh = pos[1]
         tau_elbow = self.C * sin(theta_el - theta_sh) + self.D * cos(theta_el - theta_sh)
-        tau_sh = -1*tau_elbow + self.A*sin(theta_sh) + self.B*cos(theta_sh)
+        tau_sh = -1 * tau_elbow + self.A * sin(theta_sh) + self.B * cos(theta_sh)
         #self.get_logger().info("Shoulder Torque: %r" % tau_sh)
         return [0.0, tau_sh, tau_elbow, 0.0]
     
@@ -244,7 +244,7 @@ class DemoNode(Node):
                 self.pointcmd = self.x_waiting
                 qd, qddot = WAITING_POS, [0.0, 0.0, 0.0, 0.0]
             
-            if abs(dist(self.actpos, qd)) > 0.05:
+            if abs(dist(self.actpos, qd)) > 0.1:
                 self.spline = None
 
                 a_seg = Segment()

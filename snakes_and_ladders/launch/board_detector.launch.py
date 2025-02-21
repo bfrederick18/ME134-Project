@@ -27,7 +27,7 @@ def generate_launch_description():
         namespace  = 'usb_cam',
         output     = 'screen',
         parameters = [{'camera_name':  'logitech'},
-                      {'video_device': '/dev/video2'},
+                      {'video_device': '/dev/video0'},
                       {'pixel_format': 'yuyv2rgb'},
                       {'image_width':  640},
                       {'image_height': 480},

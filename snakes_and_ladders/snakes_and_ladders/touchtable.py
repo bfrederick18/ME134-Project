@@ -47,10 +47,10 @@ class DemoNode(Node):
         self.cmdpub = self.create_publisher(JointState, '/joint_commands', 10)
         
         #gravity constants
-        self.A = -2.4
+        self.A = -3.3
         self.B = 0
         
-        self.C = -1.6
+        self.C = -2.8
         self.D = 0
 
         # Wait for a connection to happen.  This isn't necessary, but
@@ -167,18 +167,18 @@ class DemoNode(Node):
         now = self.get_clock().now()
         t   = (now - self.starttime).nanoseconds * 1e-9
 
-        self.qgoal = self.newton_raphson([0.54,0.26, 0.02])
+        # self.qgoal = self.newton_raphson([0.54,0.26, 0.02])
 
-        if t < CYCLE:
-            qd, qddot = self.super_smart_goto(t, self.position0, WAITING_POS, CYCLE)
-        elif t < 2*CYCLE:
-            qd, qddot = self.super_smart_goto(t, WAITING_POS, self.qgoal, CYCLE)
-        elif t < 3*CYCLE:
-            qd, qddot = self.super_smart_goto(t, self.qgoal, WAITING_POS, CYCLE)
+        # if t < CYCLE:
+        #     qd, qddot = self.super_smart_goto(t, self.position0, WAITING_POS, CYCLE)
+        # elif t < 2*CYCLE:
+        #     qd, qddot = self.super_smart_goto(t, WAITING_POS, self.qgoal, CYCLE)
+        # elif t < 3*CYCLE:
+        #     qd, qddot = self.super_smart_goto(t, self.qgoal, WAITING_POS, CYCLE)
 
         # Compute the trajectory.
-        # qd = []
-        # qddot = []
+        qd = []
+        qddot = []
         tau = self.gravity(self.actpos)
 
         # Send.
