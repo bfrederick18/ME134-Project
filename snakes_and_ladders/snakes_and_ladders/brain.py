@@ -87,17 +87,19 @@ class DemoNode(Node):
                 disc_world_msg.z = 0.012
                 self.point_array.append(disc_world_msg)
 
-        self.get_logger().info('Objects: %s' % len(self.point_array))
+        #self.get_logger().info('Objects: %s' % len(self.point_array))
 
         if len(self.point_array) > 0 and self.x_waiting != []:
             cart_points = [self.x_waiting]
             for pt in self.point_array:
                 cart_points.append([pt.x, pt.y, pt.z])
+                cart_points.append([pt.x + 0.06, pt.y, pt.z]) # move piece to next square
             self.point_array = []
 
             Tmove = CYCLE / 2
 
             for i in range(len(cart_points) - 1):
+                #self.get_logger().info('Cart points: %s' % cart_points)
                 p1 = cart_points[i]
                 p2 = cart_points[i + 1]
 
@@ -122,11 +124,11 @@ class DemoNode(Node):
                     grip_segment.t = Tmove
                     self.seg_arr_msg.segments.append(grip_segment)
 
-                    release_segment = Segment()
-                    release_segment.p = q2
-                    release_segment.v = [0.0 for _ in release_segment.p]
-                    release_segment.t = Tmove
-                    self.seg_arr_msg.segments.append(release_segment)
+                    # release_segment = Segment()
+                    # release_segment.p = q2
+                    # release_segment.v = [0.0 for _ in release_segment.p]
+                    # release_segment.t = Tmove
+                    # self.seg_arr_msg.segments.append(release_segment)
                     continue
 
                 dx = (transitional[0] - p1[0])
@@ -142,16 +144,24 @@ class DemoNode(Node):
 
                 seg1 = Segment()
                 seg1.p = qT
+                seg1.p[4] = -0.32 # gripper
                 seg1.v = qdotT
                 seg1.t = Tmove
                 
                 seg2 = Segment()
                 seg2.p = q2
+                seg2.p[4] = -0.32 # gripper
                 seg2.v = [0.0 for _ in seg2.p]
                 seg2.t = Tmove
 
+                seg3 = Segment()
+                seg3.p = q2
+                seg3.v = [0.0 for _ in seg3.p]
+                seg3.t = Tmove
+
                 self.seg_arr_msg.segments.append(seg1)
                 self.seg_arr_msg.segments.append(seg2)
+                self.seg_arr_msg.segments.append(seg3)
 
             segment = Segment()
             segment.p = WAITING_POS
@@ -159,8 +169,9 @@ class DemoNode(Node):
             segment.t = Tmove * 2
             self.seg_arr_msg.segments.append(segment)
 
+
             self.pub_segs.publish(self.seg_arr_msg)
-            self.get_logger().debug('All segs: %s' % self.seg_arr_msg.segments)
+            self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
 
             self.seg_arr_msg.segments = []
         else:

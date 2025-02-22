@@ -170,7 +170,7 @@ class DemoNode(Node):
 
 
     def recv_segment_array(self, msg):
-        self.get_logger().info('Received a list of segments: %r' % msg.segments)
+        #self.get_logger().info('Received a list of segments: %r' % msg.segments)
         if self.mode is Mode.WAITING:
             self.segments = msg.segments
 
