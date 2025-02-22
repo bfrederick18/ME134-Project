@@ -70,7 +70,7 @@ class DemoNode(Node):
 
     def recv_state(self, msg):
         self.x_waiting = [msg.x_waiting_x, msg.x_waiting_y, msg.x_waiting_z]
-        self.actual_pos = [msg.actpos_x, msg.actpos_y, msg.actpos_z, msg.actpos_w]
+        self.actual_pos = msg.actual_pos
 
 
     def recv_obj_array(self, msg):
@@ -101,7 +101,7 @@ class DemoNode(Node):
                 p1 = cart_points[i]
                 p2 = cart_points[i + 1]
 
-                transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.07]
+                transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.07]  # xyz
 
                 qT = self.newton_raphson(transitional)
                 q2 = self.newton_raphson(p2)
@@ -109,7 +109,7 @@ class DemoNode(Node):
                 if i == 0:
                     a_seg = Segment()
                     a_seg.p = q2
-                    a_seg.v = [0.0, 0.0, 0.0, 0.0]
+                    a_seg.v = [0.0 for _ in a_seg.p]
                     a_seg.t = Tmove * 2
                     self.seg_arr_msg.segments.append(a_seg)
                     continue
@@ -131,7 +131,7 @@ class DemoNode(Node):
                 
                 seg2 = Segment()
                 seg2.p = q2
-                seg2.v = [0.0, 0.0, 0.0, 0.0]
+                seg2.v = [0.0 for _ in seg2.p]
                 seg2.t = Tmove
 
                 self.seg_arr_msg.segments.append(seg1)
@@ -139,7 +139,7 @@ class DemoNode(Node):
 
             a_seg = Segment()
             a_seg.p = WAITING_POS
-            a_seg.v = [0.0, 0.0, 0.0, 0.0]
+            a_seg.v = [0.0 for _ in a_seg.p]
             a_seg.t = Tmove * 2
             self.seg_arr_msg.segments.append(a_seg)
 

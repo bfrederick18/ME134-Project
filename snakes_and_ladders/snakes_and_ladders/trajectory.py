@@ -76,11 +76,11 @@ class DemoNode(Node):
         self.x_waiting = ptip
         self.qD = WAITING_POS
         self.xD = ptip
-        self.qddot = [0.0, 0.0, 0.0, 0.0]
+        self.qddot = [0.0 for _ in self.qD]
         self.qgoal = None
         self.lastpointcmd = self.x_waiting
         self.pointcmd = self.x_waiting
-        self.actpos = self.position0.copy()
+        self.actual_pos = self.position0.copy()
 
         self.A = -3.3
         self.B = 0
@@ -92,7 +92,7 @@ class DemoNode(Node):
         self.abort = False
         self.tcmd = 0
         self.pcmd = WAITING_POS[:]
-        self.vcmd = [0.0, 0.0, 0.0, 0.0]
+        self.vcmd = [0.0 for _ in self.pcmd]
 
         self.cmd_msg = JointState()
         self.cmd_pub = self.create_publisher(JointState, '/joint_commands', 10)
@@ -147,17 +147,14 @@ class DemoNode(Node):
 
     # Receive feedback - called repeatedly by incoming messages.
     def recvfbk(self, fbkmsg):
-        self.actpos = fbkmsg.position
+        self.actual_pos = fbkmsg.position
 
         state = State()
         state.x_waiting_x = self.x_waiting[0]
         state.x_waiting_y = self.x_waiting[1]
         state.x_waiting_z = self.x_waiting[2]
 
-        state.actpos_x = self.actpos[0]
-        state.actpos_y = self.actpos[1]
-        state.actpos_z = self.actpos[2]
-        state.actpos_w = self.actpos[3]
+        state.actual_pos = self.actual_pos
 
         self.state_pub.publish(state)
 
@@ -168,8 +165,8 @@ class DemoNode(Node):
             self.segments = msg.segments
 
             self.tcmd = self.t
-            self.pcmd = self.actpos[:]
-            self.vcmd = [0.0, 0.0, 0.0, 0.0]
+            self.pcmd = self.actual_pos[:]
+            self.vcmd = [0.0 for _ in self.pcmd]
 
             self.set_mode(Mode.POINTING)
 
@@ -195,7 +192,11 @@ class DemoNode(Node):
         tau_elbow = self.C * sin(theta_el - theta_sh) + self.D * cos(theta_el - theta_sh)
         tau_sh = -1 * tau_elbow + self.A * sin(theta_sh) + self.B * cos(theta_sh)
         #self.get_logger().info("Shoulder Torque: %r" % tau_sh)
-        return [0.0, tau_sh, tau_elbow, 0.0]
+        
+        tau = [0.0 for _ in pos]
+        tau[1] = tau_sh
+        tau[2] = tau_elbow
+        return tau
     
 
     def update(self):
@@ -215,7 +216,7 @@ class DemoNode(Node):
                 qd, qddot = self.super_smart_goto(self.t - CYCLE * 3, [WAITING_POS[0], WAITING_POS[1], WAITING_POS[2], 
                                                                        self.position0[3]], WAITING_POS, CYCLE)
             else:
-                qd, qddot = WAITING_POS, [0.0, 0.0, 0.0, 0.0]
+                qd, qddot = WAITING_POS, [0.0 for _ in WAITING_POS]
                 self.get_logger().info('WAITING')
                 self.set_mode(Mode.WAITING)
 
@@ -234,26 +235,26 @@ class DemoNode(Node):
                 qd = self.pcmd
                 qddot = self.vcmd
             else:
-                qd, qddot = self.pcmd, [0.0, 0.0, 0.0, 0.0]
+                qd, qddot = self.pcmd, [0.0 for _ in self.pcmd]
 
             if self.spline is None and len(self.segments) == 0:
                 self.get_logger().info("Trajectory complete, switching to WAITING mode.")
                 self.set_mode(Mode.WAITING)
                 self.pointcmd = self.x_waiting
-                qd, qddot = WAITING_POS, [0.0, 0.0, 0.0, 0.0]
+                qd, qddot = WAITING_POS, [0.0 for _ in WAITING_POS]
             
-            if abs(dist(self.actpos, qd)) > 0.1:
+            if abs(dist(self.actual_pos, qd)) > 0.1:
                 self.spline = None
 
                 a_seg = Segment()
                 a_seg.p = WAITING_POS
-                a_seg.v = [0.0, 0.0, 0.0, 0.0]
+                a_seg.v = [0.0 for _ in a_seg.p]
                 a_seg.t = CYCLE
                 self.segments = [a_seg]
 
                 self.tcmd = (now - self.starttime).nanoseconds * 1e-9
-                self.pcmd = self.actpos[:]
-                self.vcmd = [0.0, 0.0, 0.0, 0.0]
+                self.pcmd = self.actual_pos[:]
+                self.vcmd = [0.0 for _ in self.pcmd]
 
                 qd = self.qD
                 qddot = self.qddot
@@ -261,9 +262,9 @@ class DemoNode(Node):
                 self.get_logger().info("HIT RETURNING: %s" % (self.mode))
 
         else: 
-            qd, qddot = WAITING_POS, [0.0, 0.0, 0.0, 0.0]
+            qd, qddot = WAITING_POS, [0.0 for _ in WAITING_POS]
         
-        tau = self.gravity(self.actpos)
+        tau = self.gravity(self.actual_pos)
         self.sendcmd(qd, qddot, tau)
 
 
