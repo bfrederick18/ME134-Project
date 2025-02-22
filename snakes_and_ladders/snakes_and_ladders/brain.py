@@ -20,7 +20,7 @@ class DemoNode(Node):
         self.get_logger().set_level(LOGGER_LEVEL)
         self.get_logger().info('Name: %s' % name)
 
-        self.chain = KinematicChain(self, 'world', 'tip', JOINT_NAMES)
+        self.chain = KinematicChain(self, 'world', 'tip', JOINT_NAMES[0:4])
 
         self.obj_arr_msg = ObjectArray()
         self.obj_arr_msg.objects = []
@@ -48,7 +48,7 @@ class DemoNode(Node):
     def newton_raphson(self, x_goal):
         x_distance = []
         q_step_size = []
-        q = self.actual_pos
+        q = self.actual_pos[0:4]  # exclude gripper
         N = 500
 
         for i in range(N+1):
@@ -65,7 +65,7 @@ class DemoNode(Node):
                 #self.get_logger().info("Completed in %d iterations" % i)
                 return q.tolist()
             
-        return WAITING_POS
+        return WAITING_POS[0:4]
         
 
     def recv_state(self, msg):
@@ -104,25 +104,41 @@ class DemoNode(Node):
                 transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.07]  # xyz
 
                 qT = self.newton_raphson(transitional)
+                qT.append(0.0)  # gripper
                 q2 = self.newton_raphson(p2)
+                q2.append(0.0)  # gripper
 
                 if i == 0:
-                    a_seg = Segment()
-                    a_seg.p = q2
-                    a_seg.v = [0.0 for _ in a_seg.p]
-                    a_seg.t = Tmove * 2
-                    self.seg_arr_msg.segments.append(a_seg)
+                    segment = Segment()
+                    segment.p = q2
+                    segment.v = [0.0 for _ in segment.p]
+                    segment.t = Tmove * 2
+                    self.seg_arr_msg.segments.append(segment)
+
+                    grip_segment = Segment()
+                    grip_segment.p = q2
+                    grip_segment.p[4] = -0.3
+                    grip_segment.v = [0.0 for _ in grip_segment.p]
+                    grip_segment.t = Tmove
+                    self.seg_arr_msg.segments.append(grip_segment)
+
+                    release_segment = Segment()
+                    release_segment.p = q2
+                    release_segment.v = [0.0 for _ in release_segment.p]
+                    release_segment.t = Tmove
+                    self.seg_arr_msg.segments.append(release_segment)
                     continue
 
                 dx = (transitional[0] - p1[0])
                 dy = (transitional[1] - p1[1])
                 v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
 
-                (_, _, Jv, _) = self.chain.fkin(qT)
+                (_, _, Jv, _) = self.chain.fkin(qT[0:4])
                 J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
                 v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
                 qdotT = np.linalg.pinv(J) @ v_cart_stack
                 qdotT = qdotT.flatten().tolist()
+                qdotT.append(0.0)  # gripper
 
                 seg1 = Segment()
                 seg1.p = qT
@@ -137,11 +153,11 @@ class DemoNode(Node):
                 self.seg_arr_msg.segments.append(seg1)
                 self.seg_arr_msg.segments.append(seg2)
 
-            a_seg = Segment()
-            a_seg.p = WAITING_POS
-            a_seg.v = [0.0 for _ in a_seg.p]
-            a_seg.t = Tmove * 2
-            self.seg_arr_msg.segments.append(a_seg)
+            segment = Segment()
+            segment.p = WAITING_POS
+            segment.v = [0.0 for _ in segment.p]
+            segment.t = Tmove * 2
+            self.seg_arr_msg.segments.append(segment)
 
             self.pub_segs.publish(self.seg_arr_msg)
             self.get_logger().debug('All segs: %s' % self.seg_arr_msg.segments)

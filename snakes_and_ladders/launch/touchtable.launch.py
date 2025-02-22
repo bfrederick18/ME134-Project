@@ -65,8 +65,8 @@ def generate_launch_description():
         executable = 'hebinode',
         output     = 'screen',
         parameters = [{'family':   'robotlab'},
-                      {'motors':   ['2.5',  '2.7', '2.4', '2.1']},
-                      {'joints':   ['base', 'shoulder', 'elbow', 'wrist']}],
+                      {'motors':   ['2.5', '2.7', '2.4', '2.1', '2.2']},
+                      {'joints':   ['base', 'shoulder', 'elbow', 'wrist', 'gripper']}],
         on_exit    = Shutdown())
 
     # Configure a trajectory node.  PLACEHOLDER FOR YOUR CODE!!

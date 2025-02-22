@@ -63,7 +63,7 @@ class DemoNode(Node):
         self.get_logger().set_level(LOGGER_LEVEL)
         self.get_logger().info('Name: %s' % name)
 
-        self.chain = KinematicChain(self, 'world', 'tip', JOINT_NAMES)
+        self.chain = KinematicChain(self, 'world', 'tip', JOINT_NAMES[0:4])
         self.mode = Mode.START_UP
 
         self.position0 = self.grabfbk()
@@ -71,7 +71,7 @@ class DemoNode(Node):
 
         self.t = 0
         self.t_start = 0
-        (ptip, _, _, _) = self.chain.fkin(WAITING_POS)
+        (ptip, _, _, _) = self.chain.fkin(WAITING_POS[0:4])
         #self.get_logger().info("Received a list of segments: %r" % ptip)
         self.x_waiting = ptip
         self.qD = WAITING_POS
@@ -81,6 +81,16 @@ class DemoNode(Node):
         self.lastpointcmd = self.x_waiting
         self.pointcmd = self.x_waiting
         self.actual_pos = self.position0.copy()
+
+        self.start_up_seq = [self.position0[:] for _ in range(4)]
+        self.start_up_seq[0][1] = WAITING_POS[1]
+        self.start_up_seq[1][0] = WAITING_POS[0]
+        self.start_up_seq[1][1] = WAITING_POS[1]
+        self.start_up_seq[2][0] = WAITING_POS[0]
+        self.start_up_seq[2][1] = WAITING_POS[1]
+        self.start_up_seq[2][2] = WAITING_POS[2]
+        self.start_up_seq[3] = WAITING_POS[:]
+        self.get_logger().info("Start up sequence: %r" % self.start_up_seq)
 
         self.A = -3.3
         self.B = 0
@@ -172,7 +182,7 @@ class DemoNode(Node):
 
 
     def super_smart_goto(self, t, initial_pos, final_pos, cycle):
-        (q, qdot) = goto5(t, cycle, np.array(initial_pos).reshape(4, 1), np.array(final_pos).reshape(4, 1))
+        (q, qdot) = goto5(t, cycle, np.array(initial_pos).reshape(len(initial_pos), 1), np.array(final_pos).reshape(len(final_pos), 1))
         return q.flatten().tolist(), qdot.flatten().tolist()
 
 
@@ -192,7 +202,7 @@ class DemoNode(Node):
         tau_elbow = self.C * sin(theta_el - theta_sh) + self.D * cos(theta_el - theta_sh)
         tau_sh = -1 * tau_elbow + self.A * sin(theta_sh) + self.B * cos(theta_sh)
         #self.get_logger().info("Shoulder Torque: %r" % tau_sh)
-        
+
         tau = [0.0 for _ in pos]
         tau[1] = tau_sh
         tau[2] = tau_elbow
@@ -205,16 +215,17 @@ class DemoNode(Node):
 
         if self.mode is Mode.START_UP:
             if self.t < CYCLE:
-                qd, qddot = self.super_smart_goto(self.t, self.position0, [self.position0[0], WAITING_POS[1], self.position0[2], self.position0[3]], CYCLE)
+                qd, qddot = self.super_smart_goto(self.t, self.position0, self.start_up_seq[0], CYCLE)
+
             elif self.t < 2 * CYCLE:
-                qd, qddot = self.super_smart_goto(self.t - CYCLE, [self.position0[0], WAITING_POS[1], self.position0[2], self.position0[3]], 
-                                                  [WAITING_POS[0], WAITING_POS[1], self.position0[2], self.position0[3]], CYCLE)
+                qd, qddot = self.super_smart_goto(self.t - CYCLE, self.start_up_seq[0], self.start_up_seq[1], CYCLE)
+            
             elif self.t < 3 * CYCLE:
-                qd, qddot = self.super_smart_goto(self.t - CYCLE * 2, [WAITING_POS[0], WAITING_POS[1], self.position0[2], self.position0[3]], 
-                                                  [WAITING_POS[0], WAITING_POS[1], WAITING_POS[2], self.position0[3]], CYCLE)
+                qd, qddot = self.super_smart_goto(self.t - CYCLE * 2, self.start_up_seq[1], self.start_up_seq[2], CYCLE)
+            
             elif self.t < 4 * CYCLE:
-                qd, qddot = self.super_smart_goto(self.t - CYCLE * 3, [WAITING_POS[0], WAITING_POS[1], WAITING_POS[2], 
-                                                                       self.position0[3]], WAITING_POS, CYCLE)
+                qd, qddot = self.super_smart_goto(self.t - CYCLE * 3, self.start_up_seq[2], self.start_up_seq[3], CYCLE)
+            
             else:
                 qd, qddot = WAITING_POS, [0.0 for _ in WAITING_POS]
                 self.get_logger().info('WAITING')
