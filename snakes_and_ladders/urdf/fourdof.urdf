@@ -186,7 +186,7 @@
   <!-- Lower L Bracket -->
   <link name="lowerbracket">
     <visual>
-      <origin xyz="-0.015 -0.0475 -0.025" rpy="0 0 0"/>
+      <origin xyz="-0.015 -0.0475 -0.025" rpy="0 0 0"/>  <!-- Lower L Bracket -0.0475 -->
       <geometry>
         <mesh filename="package://snakes_and_ladders/meshes/l_bracket_gripper.STL"
             scale="0.001 0.001 0.001"/>
@@ -204,7 +204,7 @@
 
   <link name="gripper">
     <visual>
-      <origin xyz="0.033 0.01 0.077" rpy="0 1.5708 0"/>
+      <origin xyz="0.033 0.01 0.077" rpy="0 1.5708 0"/>  <!-- Lower L Bracket 0.033 -->
       <geometry>
         <mesh filename="package://snakes_and_ladders/meshes/Gripper_Part.STL"
             scale="0.001 0.001 0.001"/>
@@ -216,7 +216,7 @@
   <joint name="revolve" type="fixed">
     <parent link="gripper"/>
     <child  link="tip"/>
-    <origin xyz="0.05 0.15 0.025" rpy="0 0 0"/>		 
+    <origin xyz="0.070 0.132 0.040" rpy="0 0 0"/>		 <!-- Lower L Bracket 0.025-0.010, 0.05-0.035 -->
   </joint>
   
   <!-- TIP FRAME -->

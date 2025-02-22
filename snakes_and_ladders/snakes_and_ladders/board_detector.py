@@ -48,8 +48,8 @@ class DetectorNode(Node):
         self.get_logger().info('Name: %s' % name)
         
         # Assume the center of marker sheet is at the world origin.
-        self.x0 = 0.6285  # self.x0 = 0.5805  # + an additional 4.8cm in x
-        self.y0 = 0.379   # self.y0 = 0.3320  # and an additional 4.7cm in y
+        self.x0 = 0.6385  # self.x0 = 0.5805, 0.6285  # + an additional 4.8cm in x
+        self.y0 = 0.3745   # self.y0 = 0.3320, 0.379  # and an additional 4.7cm in y
 
         self.initial_positions = {}
         self.M = None
@@ -70,22 +70,7 @@ class DetectorNode(Node):
         self.destroy_node()
 
     
-    def calibrate(self, image, x0, y0, annotateImage=True):
-        '''
-        Convert the (u,v) pixel position into (x,y) world coordinates
-        Inputs:
-          image: The image as seen by the camera
-          u:     The horizontal (column) pixel coordinate
-          v:     The vertical (row) pixel coordinate
-          x0:    The x world coordinate in the center of the marker paper
-          y0:    The y world coordinate in the center of the marker paper
-          annotateImage: Annotate the image with the marker information
-
-        Outputs:
-          point: The (x,y) world coordinates matching (u,v), or None
-
-        Return None for the point if not all the Aruco markers are detected
-        '''
+    def calibrate(self, image, x0, y0, annotateImage=True): 
 
         markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
             image, cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
@@ -104,8 +89,8 @@ class DetectorNode(Node):
         for i in range(4):
             uvMarkers[markerIds[i]-1,:] = np.mean(markerCorners[i], axis=1)
 
-        DX = 1.161/2
-        DY = 0.664/2
+        DX = 1.175/2
+        DY = 0.653/2
         xyMarkers = np.float32([
             [x0 - DX, y0 + DY],  # Top left
             [x0 + DX, y0 + DY],  # Top right

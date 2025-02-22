@@ -101,7 +101,7 @@ class DemoNode(Node):
                 p1 = cart_points[i]
                 p2 = cart_points[i + 1]
 
-                transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.07]  # xyz
+                transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.09]  # xyz
 
                 qT = self.newton_raphson(transitional)
                 qT.append(0.0)  # gripper
@@ -117,7 +117,7 @@ class DemoNode(Node):
 
                     grip_segment = Segment()
                     grip_segment.p = q2
-                    grip_segment.p[4] = -0.3
+                    grip_segment.p[4] = -0.32
                     grip_segment.v = [0.0 for _ in grip_segment.p]
                     grip_segment.t = Tmove
                     self.seg_arr_msg.segments.append(grip_segment)
