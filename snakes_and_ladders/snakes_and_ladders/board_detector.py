@@ -11,24 +11,16 @@ from sensor_msgs.msg    import Image
 
 from project_msgs.msg import Object, ObjectArray
 
-from snakes_and_ladders.constants import HSV_LIMITS_PURPLE
+from snakes_and_ladders.constants import HSV_LIMITS_PURPLE, LOGGER_LEVEL
 
 
 def board_detector(self, frame):
-    # Convert to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    
-    # Edge detection
     edges = cv2.Canny(gray, 50, 150)
-
-    # Find contours (detect grid lines)
     contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-    # Sort and find the largest contour (assumed to be the board)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
     board_contour = contours[0]  # Largest contour (the board)
 
-    # Get bounding box of the board
     rotated_rectangle = cv2.minAreaRect(board_contour)
     ((um, vm), (wm,  hm), angle) = cv2.minAreaRect(board_contour)
     box = np.int0(cv2.boxPoints(rotated_rectangle))
@@ -52,27 +44,26 @@ class DetectorNode(Node):
 
     def __init__(self, name):
         super().__init__(name)
-        self.get_logger().info("Name: %s" % name)
+        self.get_logger().set_level(LOGGER_LEVEL)
+        self.get_logger().info('Name: %s' % name)
         
         # Assume the center of marker sheet is at the world origin.
-        self.x0 = 0.6285
-        self.y0 = 0.379
-        # self.x0 = 0.5805  # + an additional 4.8cm in x
-        # self.y0 = 0.3320   # and an additional 4.7cm in y
-        
-        self.pub_rgb = self.create_publisher(Image, name +'/image_raw', 3)
-        self.pub_binary = self.create_publisher(Image, name +'/binary', 3)
-
-        self.pub_obj_array = self.create_publisher(ObjectArray, name + '/object_array', 1)
-        self.object_array = ObjectArray()
-
-        self.bridge = cv_bridge.CvBridge()
+        self.x0 = 0.6285  # self.x0 = 0.5805  # + an additional 4.8cm in x
+        self.y0 = 0.379   # self.y0 = 0.3320  # and an additional 4.7cm in y
 
         self.initial_positions = {}
         self.M = None
+        self.object_array = ObjectArray()
+        self.bridge = cv_bridge.CvBridge()
+        
+        self.pub_rgb = self.create_publisher(Image, name +'/image_raw', 3)
+        self.pub_binary = self.create_publisher(Image, name +'/binary', 3)
+        self.pub_obj_array = self.create_publisher(ObjectArray, name + '/object_array', 1)
 
         self.sub = self.create_subscription(
             Image, '/image_raw', self.process, 1)
+        
+        self.get_logger().info('Board detector running...')
 
 
     def shutdown(self):
@@ -102,7 +93,7 @@ class DetectorNode(Node):
             cv2.aruco.drawDetectedMarkers(image, markerCorners, markerIds)
 
         if (markerIds is None or len(markerIds) != 4 or set(markerIds.flatten()) != set([1,2,3,4])):
-            self.get_logger().info("this sucks")
+            self.get_logger().debug('Not all markers detected')
             return None
         
         for i, marker_id in enumerate(markerIds.flatten()):
@@ -123,7 +114,6 @@ class DetectorNode(Node):
         ])       
 
         self.M = cv2.getPerspectiveTransform(uvMarkers, xyMarkers)
-        return self.M  # added this back because to use as a successful calibration flag
     
 
     def pixelToWorld(self, u, v, M):
@@ -146,8 +136,9 @@ class DetectorNode(Node):
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         binary = cv2.inRange(hsv, HSV_LIMITS_PURPLE[:, 0], HSV_LIMITS_PURPLE[:, 1])
 
-        if type(self.calibrate(frame, self.x0, self.y0, annotateImage=True)) is not np.ndarray:
-            self.get_logger().info('Calibration failed')
+        self.calibrate(frame, self.x0, self.y0, annotateImage=True)
+        if type(self.M) is not np.ndarray:
+            self.get_logger().debug('Calibration failed')
             return
 
         # # Help to determine the HSV range...
@@ -173,8 +164,8 @@ class DetectorNode(Node):
         if len(contours) > 0:
             for contour in sorted(contours, key=cv2.contourArea, reverse=True):
                 ((ur, vr), radius) = cv2.minEnclosingCircle(contour)
-                ur     = int(ur)
-                vr     = int(vr)
+                ur = int(ur)
+                vr = int(vr)
                 radius = int(radius)
 
                 try:
@@ -190,7 +181,7 @@ class DetectorNode(Node):
                     disk_world = self.pixelToWorld(int(ue), int(ve), self.M)
                     if disk_world is not None:
                         disk_world_x, disk_world_y = disk_world
-                        self.get_logger().info('Piece Location: (%s, %s)' % (disk_world_x, disk_world_y))
+                        self.get_logger().debug('Piece Location: (%s, %s)' % (disk_world_x, disk_world_y))
                         obj_disk = Object()
                         obj_disk.type = Object.DISK
                         obj_disk.x = float(disk_world_x)
@@ -200,9 +191,11 @@ class DetectorNode(Node):
                         
                         self.object_array.objects.append(obj_disk)
 
+
         board_detector(self, frame)
 
-
+        ''' 
+        # Center pixel HSV value for debugging and tuning
         (H, W, D) = frame.shape
         uc = W//2
         vc = H//2
@@ -210,7 +203,7 @@ class DetectorNode(Node):
         frame = cv2.line(frame, (0,vc), (W-1,vc), (255, 255, 255), 1)
         self.get_logger().info(
             "Center pixel HSV = (%3d, %3d, %3d)" % tuple(hsv[vc, uc]))
-
+        '''
 
         self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
         self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))

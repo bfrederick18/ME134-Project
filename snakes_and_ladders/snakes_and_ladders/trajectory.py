@@ -10,7 +10,7 @@ from project_msgs.msg import PointArray, Segment, SegmentArray, State
 
 from hw5code.TrajectoryUtils import goto, spline, goto5, spline5
 from hw6sols.KinematicChainSol import KinematicChain
-from snakes_and_ladders.constants import CYCLE, JOINT_NAMES, TRAJ_RATE, WAITING_POS
+from snakes_and_ladders.constants import CYCLE, JOINT_NAMES, LOGGER_LEVEL, TRAJ_RATE, WAITING_POS
 
 
 class Mode(Enum):
@@ -60,6 +60,8 @@ class Spline():
 class DemoNode(Node):
     def __init__(self, name):
         super().__init__(name)
+        self.get_logger().set_level(LOGGER_LEVEL)
+        self.get_logger().info('Name: %s' % name)
 
         self.chain = KinematicChain(self, 'world', 'tip', JOINT_NAMES)
         self.mode = Mode.START_UP
@@ -85,10 +87,21 @@ class DemoNode(Node):
         self.C = -2.8
         self.D = 0
 
-        self.cmdmsg = JointState()
-        self.cmdpub = self.create_publisher(JointState, '/joint_commands', 10)
+        self.segments = []
+        self.spline = None
+        self.abort = False
+        self.tcmd = 0
+        self.pcmd = WAITING_POS[:]
+        self.vcmd = [0.0, 0.0, 0.0, 0.0]
+
+        self.cmd_msg = JointState()
+        self.cmd_pub = self.create_publisher(JointState, '/joint_commands', 10)
 
         self.state_pub = self.create_publisher(State, name + '/state', 10)
+
+        self.sub_seg_array = self.create_subscription(
+            SegmentArray, '/brain/segment_array', self.recv_segment_array, 1)
+
 
         self.get_logger().info("Waiting for a /joint_commands subscriber...")
         while(not self.count_subscribers('/joint_commands')):
@@ -96,16 +109,6 @@ class DemoNode(Node):
 
         self.fbksub = self.create_subscription(
             JointState, '/joint_states', self.recvfbk, 10)
-        
-        self.sub_seg_array = self.create_subscription(
-            SegmentArray, '/brain/segment_array', self.recv_segment_array, 1)
-        
-        self.segments = []
-        self.spline = None
-        self.abort = False
-        self.tcmd = 0
-        self.pcmd = WAITING_POS[:]
-        self.vcmd = [0.0, 0.0, 0.0, 0.0]
 
         rate           = TRAJ_RATE
         self.starttime = self.get_clock().now()
@@ -134,12 +137,12 @@ class DemoNode(Node):
 
 
     def sendcmd(self, pos, vel, eff = []):
-        self.cmdmsg.header.stamp = self.get_clock().now().to_msg()
-        self.cmdmsg.name         = JOINT_NAMES
-        self.cmdmsg.position     = pos
-        self.cmdmsg.velocity     = vel
-        self.cmdmsg.effort       = eff
-        self.cmdpub.publish(self.cmdmsg)
+        self.cmd_msg.header.stamp = self.get_clock().now().to_msg()
+        self.cmd_msg.name         = JOINT_NAMES
+        self.cmd_msg.position     = pos
+        self.cmd_msg.velocity     = vel
+        self.cmd_msg.effort       = eff
+        self.cmd_pub.publish(self.cmd_msg)
 
 
     # Receive feedback - called repeatedly by incoming messages.
