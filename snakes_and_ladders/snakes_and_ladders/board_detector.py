@@ -9,7 +9,7 @@ import time
 from rclpy.node         import Node
 from sensor_msgs.msg    import Image
 
-from project_msgs.msg import Object, ObjectArray
+from project_msgs.msg import Object, ObjectArray, BoxArray
 
 from snakes_and_ladders.constants import HSV_LIMITS_PURPLE, LOGGER_LEVEL
 
@@ -23,11 +23,12 @@ def board_detector(self, frame):
 
     rotated_rectangle = cv2.minAreaRect(board_contour)
     ((um, vm), (wm,  hm), angle) = cv2.minAreaRect(board_contour)
+    
     box = np.int0(cv2.boxPoints(rotated_rectangle))
     cv2.drawContours(frame, [box], 0, (0, 255, 0), 2)
 
-    return(um, vm, wm, hm)
-    
+    return(um, vm, wm, hm)   
+ 
 
 def average_list(list):
     if not list:
@@ -54,14 +55,18 @@ class DetectorNode(Node):
         self.initial_positions = {}
         self.M = None
         self.object_array = ObjectArray()
+        self.box_array = BoxArray()
         self.bridge = cv_bridge.CvBridge()
         
         self.pub_rgb = self.create_publisher(Image, name +'/image_raw', 3)
         self.pub_binary = self.create_publisher(Image, name +'/binary', 3)
         self.pub_obj_array = self.create_publisher(ObjectArray, name + '/object_array', 1)
+        self.pub_box_array = self.create_publisher(BoxArray, name + '/box_array', 1)
 
         self.sub = self.create_subscription(
             Image, '/image_raw', self.process, 1)
+        
+        self.counter = 0
         
         self.get_logger().info('Board detector running...')
 
@@ -114,6 +119,7 @@ class DetectorNode(Node):
 
     def process(self, msg):
         self.object_array.objects = []
+        self.box_array.box = []
 
         assert(msg.encoding == 'rgb8')
         frame = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
@@ -175,10 +181,12 @@ class DetectorNode(Node):
                         obj_disk.theta = 0.0
                         
                         self.object_array.objects.append(obj_disk)
+        
 
-
-        board_detector(self, frame)
-
+        [um, vm, wm, hm] = board_detector(self, frame)
+        disk_world_x, disk_world_y = self.pixelToWorld(int(um), int(vm), self.M)
+        self.box_array.box = [float(disk_world_x), float(disk_world_y)]
+            
         ''' 
         # Center pixel HSV value for debugging and tuning
         (H, W, D) = frame.shape
@@ -193,6 +201,7 @@ class DetectorNode(Node):
         self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
         self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))
         self.pub_obj_array.publish(self.object_array)
+        self.pub_box_array.publish(self.box_array)
 
 
 def main(args=None):

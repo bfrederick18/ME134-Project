@@ -2,13 +2,15 @@ import cv2
 import numpy as np
 from math import sin, cos, pi, dist
 
+import matplotlib.pyplot as plt
+
 import rclpy
 import cv_bridge
 
 from rclpy.node import Node
 
 from geometry_msgs.msg import Point
-from project_msgs.msg import Object, ObjectArray, PointArray, Segment, SegmentArray, State
+from project_msgs.msg import Object, ObjectArray, PointArray, Segment, SegmentArray, BoxArray, State
 
 from hw6sols.KinematicChainSol import KinematicChain
 from snakes_and_ladders.constants import CYCLE, JOINT_NAMES, LOGGER_LEVEL, WAITING_POS
@@ -27,12 +29,16 @@ class DemoNode(Node):
         self.point_array = []
         self.seg_arr_msg = SegmentArray()
         self.seg_arr_msg.segments = []
+        self.box_arr_msg = BoxArray()
+        self.box_arr_msg.box = []
         self.x_waiting = []
         self.actual_pos = []
+        self.board_positions = {}
         self.bridge = cv_bridge.CvBridge()
 
         self.pub_segs = self.create_publisher(SegmentArray, name + '/segment_array', 1)
-        
+        self.board_location = self.create_subscription(
+            BoxArray, '/board_detector/box_array', self.recv_box_array, 1)
         self.sub_obj_array = self.create_subscription(
               ObjectArray, '/board_detector/object_array', self.recv_obj_array, 1)
         self.sub_state = self.create_subscription(
@@ -171,12 +177,107 @@ class DemoNode(Node):
 
 
             self.pub_segs.publish(self.seg_arr_msg)
-            self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
+            #self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
 
             self.seg_arr_msg.segments = []
         else:
             self.get_logger().debug('this sucks')
+            
+            
+    def recv_box_array(self, msg):
+        self.box_arr_msg.box = []
+        
+        for box in msg.box:
+            self.box_arr_msg.box.append(box)
+            
+        w = 0.508
+        h = 0.514
+        # Calculate cell width & height (assuming a 10x10 board)
+        cell_width = w / 10
+        cell_height = h / 10    
+        x_mid = self.box_arr_msg.box[0]
+        y_mid = self.box_arr_msg.box[1]
 
+        self.get_logger().info('Board Positions: %s, %s' % (x_mid, y_mid))
+
+        self.board_positions = {}
+        for row in range(5):
+            for col in range(5):
+                x_pos = x_mid - (4 - col)*cell_width - cell_width/2
+                y_pos = y_mid - (4 - row)*cell_height - cell_height/2
+                if row == 0:
+                    cell_number = col + 1
+                elif row == 1:
+                    cell_number = 20 - col
+                elif row == 2:
+                    cell_number = 21 + col
+                elif row == 3:
+                    cell_number = 40 - col
+                elif row == 4:
+                    cell_number = 41 + col
+                self.board_positions[cell_number] = (x_pos, y_pos)
+        
+        for row in range(5):
+            for col in range(5, 10):
+                x_pos = x_mid + (col - 5) * cell_width + cell_width/2
+                y_pos = y_mid - (4 - row) * cell_height - cell_height/2
+                if row == 0:
+                    cell_number = col + 1
+                elif row == 1:
+                    cell_number = 20 - col
+                elif row == 2:
+                    cell_number = 21 + col
+                elif row == 3:
+                    cell_number = 40 - col
+                elif row == 4:
+                    cell_number = 41 + col
+                self.board_positions[cell_number] = (x_pos, y_pos)
+        
+        for row in range(5, 10):
+            for col in range(5, 10):
+                x_pos = x_mid + (col - 5) * cell_width + cell_width/2
+                y_pos = y_mid + (row - 5) * cell_height + cell_height/2
+                if row == 5:
+                    cell_number = 60 - col 
+                elif row == 6:
+                    cell_number = 61 + col
+                elif row == 7:
+                    cell_number = 80 - col
+                elif row == 8:
+                    cell_number = 81 + col
+                elif row == 9:
+                    cell_number = 100 - col
+                self.board_positions[cell_number] = (x_pos, y_pos)
+        
+        for row in range(5, 10):
+            for col in range(5):
+                x_pos = x_mid - (4 - col)*cell_width - cell_width/2 
+                y_pos = y_mid + (row - 5) * cell_height + cell_height/2
+                if row == 5:
+                    cell_number = 60 - col 
+                elif row == 6:
+                    cell_number = 61 + col
+                elif row == 7:
+                    cell_number = 80 - col
+                elif row == 8:
+                    cell_number = 81 + col
+                elif row == 9:
+                    cell_number = 100 - col
+                self.board_positions[cell_number] = (x_pos, y_pos)
+
+        #self.get_logger().info('Board Positions: %s' % board_positions)
+
+        # Define ladders manually (start → end)
+        ladders = {
+            8: 27, 21: 41, 32: 51, 54: 66, 70: 89,
+            77: 98
+        }
+
+        # Define snakes manually (start → end)
+        snakes = {
+            15: 4, 29: 12, 46: 18, 68: 49, 79: 57,
+            95: 74
+        }
 
 def main(args=None):
     rclpy.init(args=args)
