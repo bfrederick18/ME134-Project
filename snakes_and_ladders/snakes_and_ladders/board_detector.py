@@ -12,22 +12,6 @@ from sensor_msgs.msg    import Image
 from project_msgs.msg import Object, ObjectArray, BoxArray
 
 from snakes_and_ladders.constants import HSV_LIMITS_PURPLE, LOGGER_LEVEL
-
-
-def board_detector(self, frame):
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 50, 150)
-    contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)
-    board_contour = contours[0]  # Largest contour (the board)
-
-    rotated_rectangle = cv2.minAreaRect(board_contour)
-    ((um, vm), (wm,  hm), angle) = cv2.minAreaRect(board_contour)
-    
-    box = np.int0(cv2.boxPoints(rotated_rectangle))
-    cv2.drawContours(frame, [box], 0, (0, 255, 0), 2)
-
-    return(um, vm, wm, hm)   
  
 
 def average_list(list):
@@ -60,6 +44,7 @@ class DetectorNode(Node):
         
         self.pub_rgb = self.create_publisher(Image, name +'/image_raw', 3)
         self.pub_binary = self.create_publisher(Image, name +'/binary', 3)
+        self.pub_board = self.create_publisher(Image, name +'/board', 3)
         self.pub_obj_array = self.create_publisher(ObjectArray, name + '/object_array', 1)
         self.pub_box_array = self.create_publisher(BoxArray, name + '/box_array', 1)
 
@@ -73,6 +58,25 @@ class DetectorNode(Node):
 
     def shutdown(self):
         self.destroy_node()
+
+
+    def board_detector(self, frame):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)
+        board_contour = contours[0]  # Largest contour (the board)
+
+        rotated_rectangle = cv2.minAreaRect(board_contour)
+        ((um, vm), (wm,  hm), angle) = cv2.minAreaRect(board_contour)
+        
+        box = np.int0(cv2.boxPoints(rotated_rectangle))
+        cv2.drawContours(frame, [box], 0, (0, 255, 0), 2)
+
+        # self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
+        self.pub_board.publish(self.bridge.cv2_to_imgmsg(edges))
+
+        return(um, vm, wm, hm)   
 
     
     def calibrate(self, image, x0, y0, annotateImage=True): 
@@ -183,7 +187,7 @@ class DetectorNode(Node):
                         self.object_array.objects.append(obj_disk)
         
 
-        [um, vm, wm, hm] = board_detector(self, frame)
+        [um, vm, wm, hm] = self.board_detector(frame)
         disk_world_x, disk_world_y = self.pixelToWorld(int(um), int(vm), self.M)
         self.box_array.box = [float(disk_world_x), float(disk_world_y)]
             
