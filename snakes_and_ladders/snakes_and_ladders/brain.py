@@ -131,7 +131,7 @@ class DemoNode(Node):
 
         if len(self.point_array) > 0 and self.x_waiting != []:
             cart_points = [self.x_waiting]
-            cart_points.append([1.32, 0.285, 0.04])  # DICE HARDCODE DELETE LATER
+            cart_points.append([1.32, 0.285, 0.03])  # DICE HARDCODE DELETE LATER
             cart_points.append([1.32, 0.285, 0.09])  # LIFTED DICE POSITION (HARDCODE)
 
             for pt in self.point_array:

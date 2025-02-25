@@ -21,10 +21,10 @@ def generate_launch_description():
 
     # Configure the USB camera node
     node_usbcam = Node(
-        name       = 'usb_cam', 
+        name       = 'side_cam', 
         package    = 'usb_cam',
         executable = 'usb_cam_node_exe',
-        namespace  = 'usb_cam',
+        namespace  = 'side_cam',
         output     = 'screen',
         parameters = [{'camera_name':  'logitech'},
                       {'video_device': '/dev/video2'},
@@ -44,7 +44,7 @@ def generate_launch_description():
         package    = 'snakes_and_ladders',
         executable = 'dice_detector',
         output     = 'screen',
-        remappings = [('/image_raw', '/usb_cam/image_raw')])
+        remappings = [('/image_raw', '/side_cam/image_raw')])
 
 
     ######################################################################

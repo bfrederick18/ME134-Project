@@ -4,7 +4,7 @@ import numpy as np
 from math import pi
 
 
-LOGGER_LEVEL = rclpy.logging.LoggingSeverity.INFO  # rclpy.logging.LoggingSeverity.DEBUG or rclpy.logging.LoggingSeverity.INFO
+LOGGER_LEVEL = rclpy.logging.LoggingSeverity.DEBUG  # rclpy.logging.LoggingSeverity.DEBUG or rclpy.logging.LoggingSeverity.INFO
 
 TRAJ_RATE = 200  # Hertz
 
