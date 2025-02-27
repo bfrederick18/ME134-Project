@@ -10,7 +10,7 @@ import cv_bridge
 from rclpy.node import Node
 
 from geometry_msgs.msg import Point
-from project_msgs.msg import Object, ObjectArray, PointArray, Segment, SegmentArray, BoxArray, State
+from project_msgs.msg import Object, ObjectArray, PointArray, Segment, SegmentArray, BoxArray, State, Num
 
 from hw6sols.KinematicChainSol import KinematicChain
 from snakes_and_ladders.constants import CYCLE, JOINT_NAMES, LOGGER_LEVEL, WAITING_POS, GRIPPER_CLOSE_DICE, GRIPPER_CLOSE_PURPLE
@@ -24,6 +24,8 @@ class DemoNode(Node):
 
         self.chain = KinematicChain(self, 'world', 'tip', JOINT_NAMES[0:4])
 
+        self.waiting_msg = None
+        self.check_board = False
         self.obj_arr_msg = ObjectArray()
         self.obj_arr_msg.objects = []
         self.point_array = []
@@ -43,6 +45,8 @@ class DemoNode(Node):
               ObjectArray, '/board_detector/object_array', self.recv_obj_array, 1)
         self.sub_state = self.create_subscription(
             State, '/trajectory/state', self.recv_state, 1)
+        self.sub_check = self.create_subscription(
+            Num, '/trajectory/num', self.recv_check, 1)
         
         self.get_logger().info('Brain running...')
 
@@ -131,8 +135,8 @@ class DemoNode(Node):
 
         if len(self.point_array) > 0 and self.x_waiting != []:
             cart_points = [self.x_waiting]
-            cart_points.append([1.32, 0.285, 0.03])  # DICE HARDCODE DELETE LATER
-            cart_points.append([1.32, 0.285, 0.09])  # LIFTED DICE POSITION (HARDCODE)
+            cart_points.append([1.35, 0.35, 0.03])  # DICE HARDCODE DELETE LATER 1.32, 0.285, 0.03
+            cart_points.append([1.35, 0.35, 0.09])  # LIFTED DICE POSITION (HARDCODE) 1.32, 0.285, 0.09
 
             for pt in self.point_array:
                 cart_points.append([pt.x, pt.y, pt.z]) # PIECE POSITION
@@ -153,15 +157,15 @@ class DemoNode(Node):
             q3 = self.newton_raphson_dice(lifted_dice_pos)
             q3.append(0.0)
             
-            q4 = self.newton_raphson_dice(initial_player_pos)
+            q4 = self.newton_raphson(initial_player_pos)
             q4.append(0.0)
 
             transitional = [(initial_player_pos[0] + final_player_pos[0]) / 2, (initial_player_pos[1] 
                                                                                 + final_player_pos[1]) / 2, 0.09] 
-            qT = self.newton_raphson_dice(transitional)
+            qT = self.newton_raphson(transitional)
             qT.append(0.0)
             
-            q5 = self.newton_raphson_dice(final_player_pos)
+            q5 = self.newton_raphson(final_player_pos)
             q5.append(0.0)
 
             #going to dice
@@ -367,57 +371,65 @@ class DemoNode(Node):
             self.seg_arr_msg.segments = []
         else:
             self.get_logger().debug('this sucks')
+    
+    def recv_check(self, msg):
+        self.waiting_msg = msg.num
+        if self.waiting_msg == 1:
+            self.check_board = True
+        else:
+            self.check_board = False
             
             
     def recv_box_array(self, msg):
-        self.box_arr_msg.box = []
-        
-        for box in msg.box:
-            self.box_arr_msg.box.append(box)
+        if self.check_board == True:
+            self.box_arr_msg.box = []
             
-        w = 0.508
-        h = 0.514
-        # Calculate cell width & height (assuming a 10x10 board)
-        cell_width = w / 10
-        cell_height = h / 10    
-        x_mid = self.box_arr_msg.box[0]
-        y_mid = self.box_arr_msg.box[1]
+            for box in msg.box:
+                self.box_arr_msg.box.append(box)
+                
+            w = 0.508
+            h = 0.514
+            # Calculate cell width & height (assuming a 10x10 board)
+            cell_width = w / 10
+            cell_height = h / 10    
+            x_mid = self.box_arr_msg.box[0]
+            y_mid = self.box_arr_msg.box[1]
 
-        self.get_logger().info('Board Positions: %s, %s' % (x_mid, y_mid))
+            self.get_logger().info('Board Positions: %s, %s' % (x_mid, y_mid))
 
-        self.board_positions = {}
-        for row in range(10):
-            for col in range(10):
-                if col < 5:
-                    x_pos = x_mid - (4 - col) * cell_width - cell_width / 2
-                else:
-                    x_pos = x_mid + (col - 5) * cell_width + cell_width / 2
+            self.board_positions = {}
+            for row in range(10):
+                for col in range(10):
+                    if col < 5:
+                        x_pos = x_mid - (4 - col) * cell_width - cell_width / 2
+                    else:
+                        x_pos = x_mid + (col - 5) * cell_width + cell_width / 2
 
-                if row < 5:
-                    y_pos = y_mid - (4 - row) * cell_height - cell_height / 2
-                else:
-                    y_pos = y_mid + (row - 5) * cell_height + cell_height / 2
+                    if row < 5:
+                        y_pos = y_mid - (4 - row) * cell_height - cell_height / 2
+                    else:
+                        y_pos = y_mid + (row - 5) * cell_height + cell_height / 2
 
-                if row % 2 == 0:
-                    cell_number = 20 * (row // 2) + 1 + col
-                else:
-                    cell_number = 20 * (((row - 1) // 2) + 1) - col
+                    if row % 2 == 0:
+                        cell_number = 20 * (row // 2) + 1 + col
+                    else:
+                        cell_number = 20 * (((row - 1) // 2) + 1) - col
 
-                self.board_positions[cell_number] = (x_pos, y_pos)
+                    self.board_positions[cell_number] = (x_pos, y_pos)
 
-        #self.get_logger().info('Board Positions: %s' % board_positions)
+            #self.get_logger().info('Board Positions: %s' % board_positions)
 
-        # Define ladders manually (start → end)
-        ladders = {
-            8: 27, 21: 41, 32: 51, 54: 66, 70: 89,
-            77: 98
-        }
+            # Define ladders manually (start → end)
+            ladders = {
+                8: 27, 21: 41, 32: 51, 54: 66, 70: 89,
+                77: 98
+            }
 
-        # Define snakes manually (start → end)
-        snakes = {
-            15: 4, 29: 12, 46: 18, 68: 49, 79: 57,
-            95: 74
-        }
+            # Define snakes manually (start → end)
+            snakes = {
+                15: 4, 29: 12, 46: 18, 68: 49, 79: 57,
+                95: 74
+            }
 
 def main(args=None):
     rclpy.init(args=args)

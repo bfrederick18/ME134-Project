@@ -48,11 +48,12 @@ def detect_dice_face(self, frame):
     # Filter contours and draw bounding box
     for contour in contours:
         area = cv2.contourArea(contour)
-        if area > 500:  # Adjust area threshold as needed
+        self.get_logger().info("Dice Reading: %s" % area)
+        if area > 500 and area < 3000:  # Adjust area threshold as needed
             rotatedRectangle = cv2.minAreaRect(contour)
             ((x, y), (w, h), angle) = cv2.minAreaRect(contour)
             box = np.int0(cv2.boxPoints(rotatedRectangle))
-            cv2.drawContours(frame, [box], 0, (0, 255, 0), 2)
+            cv2.drawContours(frame, [box], 0, (0, 0, 255), 2)
             #cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
     
 
@@ -109,7 +110,7 @@ class DetectorNode(Node):
                 self.counter += 1
                 avg_reading = average_list(self.die_rolls)
                 round_read = math.ceil(avg_reading)
-                self.get_logger().info("Dice Reading: %s" % round_read)
+                #self.get_logger().info("Dice Reading: %s" % round_read)
                 die_roll = detect_die_number(self,frame)
                 self.die_rolls = []
                 #self.pub_roll.publish(die_roll)

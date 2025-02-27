@@ -6,7 +6,7 @@ from math import sin, cos, pi, dist
 from rclpy.node         import Node
 from sensor_msgs.msg    import JointState
 
-from project_msgs.msg import PointArray, Segment, SegmentArray, State
+from project_msgs.msg import PointArray, Segment, SegmentArray, State, Num
 
 from hw5code.TrajectoryUtils import goto, spline, goto5, spline5
 from hw6sols.KinematicChainSol import KinematicChain
@@ -108,6 +108,9 @@ class DemoNode(Node):
         self.cmd_pub = self.create_publisher(JointState, '/joint_commands', 10)
 
         self.state_pub = self.create_publisher(State, name + '/state', 10)
+
+        self.waiting_msg = Num()
+        self.waiting_pub = self.create_publisher(Num, name + '/num', 1)
 
         self.sub_seg_array = self.create_subscription(
             SegmentArray, '/brain/segment_array', self.recv_segment_array, 1)
@@ -213,6 +216,8 @@ class DemoNode(Node):
         now = self.get_clock().now()
         self.t  = (now - self.starttime).nanoseconds * 1e-9
 
+        self.waiting_msg.num = 0
+
         if self.mode is Mode.START_UP:
             if self.t < CYCLE:
                 qd, qddot = self.super_smart_goto(self.t, self.position0, self.start_up_seq[0], CYCLE)
@@ -230,6 +235,7 @@ class DemoNode(Node):
                 qd, qddot = WAITING_POS, [0.0 for _ in WAITING_POS]
                 self.get_logger().info('WAITING')
                 self.set_mode(Mode.WAITING)
+                self.waiting_msg.num = 1
 
         elif self.mode is Mode.POINTING:
             if self.spline and ((self.t - self.spline.t0) > self.spline.T or self.abort):
@@ -253,7 +259,8 @@ class DemoNode(Node):
                 self.set_mode(Mode.WAITING)
                 self.pointcmd = self.x_waiting
                 qd, qddot = WAITING_POS, [0.0 for _ in WAITING_POS]
-            
+                self.waiting_msg.num = 1
+
             if abs(dist(self.actual_pos, qd)) > 0.1:
                 self.spline = None
 
@@ -274,6 +281,9 @@ class DemoNode(Node):
 
         else: 
             qd, qddot = WAITING_POS, [0.0 for _ in WAITING_POS]
+            self.waiting_msg.num = 1
+        
+        self.waiting_pub.publish(self.waiting_msg)
         
         tau = self.gravity(self.actual_pos)
         self.sendcmd(qd, qddot, tau)
