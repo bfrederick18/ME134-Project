@@ -48,13 +48,13 @@ def detect_dice_face(self, frame):
     # Filter contours and draw bounding box
     for contour in contours:
         area = cv2.contourArea(contour)
-        self.get_logger().info("Dice Reading: %s" % area)
         if area > 500 and area < 3000:  # Adjust area threshold as needed
             rotatedRectangle = cv2.minAreaRect(contour)
             ((x, y), (w, h), angle) = cv2.minAreaRect(contour)
             box = np.int0(cv2.boxPoints(rotatedRectangle))
             cv2.drawContours(frame, [box], 0, (0, 0, 255), 2)
             #cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            return (x, y, w, h, angle)
     
 
 def average_list(list):
@@ -145,8 +145,8 @@ class DetectorNode(Node):
         for i in range(4):
             uvMarkers[markerIds[i]-1,:] = np.mean(markerCorners[i], axis=1)
 
-        DX = 0.112/2
-        DY = 0.112/2
+        DX = 0.105/2
+        DY = 0.105/2
         xyMarkers = np.float32([
             [x0 - DX, y0 + DY],  # Top left
             [x0 + DX, y0 + DY],  # Top right

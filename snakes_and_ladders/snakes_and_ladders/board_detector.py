@@ -34,7 +34,7 @@ class DetectorNode(Node):
         
         # Assume the center of marker sheet is at the world origin.
         self.x0 = 0.6385  # self.x0 = 0.5805, 0.6285  # + an additional 4.8cm in x
-        self.y0 = 0.3745   # self.y0 = 0.3320, 0.379  # and an additional 4.7cm in y
+        self.y0 = 0.3755   # self.y0 = 0.3320, 0.379  # and an additional 4.7cm in y
 
         self.initial_positions = {}
         self.M = None
@@ -76,7 +76,9 @@ class DetectorNode(Node):
         # self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
         self.pub_board.publish(self.bridge.cv2_to_imgmsg(edges))
 
-        return(um, vm, wm, hm)   
+        self.get_logger().info('Angle: %s' % angle)
+
+        return(um, vm, wm, hm, angle)   
 
     
     def calibrate(self, image, x0, y0, annotateImage=True): 
@@ -187,9 +189,9 @@ class DetectorNode(Node):
                         self.object_array.objects.append(obj_disk)
         
 
-        [um, vm, wm, hm] = self.board_detector(frame)
-        disk_world_x, disk_world_y = self.pixelToWorld(int(um), int(vm), self.M)
-        self.box_array.box = [float(disk_world_x), float(disk_world_y)]
+        [um, vm, wm, hm, angle] = self.board_detector(frame)
+        board_center_x, board_center_y = self.pixelToWorld(int(um), int(vm), self.M)
+        self.box_array.box = [float(board_center_x), float(board_center_y), float(angle)]
             
         ''' 
         # Center pixel HSV value for debugging and tuning

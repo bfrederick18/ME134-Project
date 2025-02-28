@@ -135,10 +135,11 @@ class DemoNode(Node):
 
         if len(self.point_array) > 0 and self.x_waiting != []:
             cart_points = [self.x_waiting]
-            cart_points.append([1.35, 0.35, 0.03])  # DICE HARDCODE DELETE LATER 1.32, 0.285, 0.03
-            cart_points.append([1.35, 0.35, 0.09])  # LIFTED DICE POSITION (HARDCODE) 1.32, 0.285, 0.09
+            cart_points.append([1.338, 0.301, 0.03])  # DICE HARDCODE DELETE LATER [1.321, 0.324, 0.03]
+            cart_points.append([1.338, 0.301, 0.09])  # LIFTED DICE POSITION (HARDCODE) [1.321, 0.324, 0.09]
 
             for pt in self.point_array:
+                cart_points.append([pt.x, pt.y, pt.z + 0.04]) # PIECE POSITION
                 cart_points.append([pt.x, pt.y, pt.z]) # PIECE POSITION
                 cart_points.append([pt.x + 0.06, pt.y, pt.z])  # MOVE PIECE TO NEXT SQUARE
             self.point_array = [] 
@@ -148,25 +149,29 @@ class DemoNode(Node):
             waiting_pos = cart_points[0]
             dice_rest_pos = cart_points[1]
             lifted_dice_pos = cart_points[2]
-            initial_player_pos = cart_points[3]
-            final_player_pos = cart_points[4]
+            initial_player_pos_raise = cart_points[3]
+            initial_player_pos = cart_points[4]
+            final_player_pos = cart_points[5]
 
             q2 = self.newton_raphson_dice(dice_rest_pos)
             q2.append(0.0)
 
             q3 = self.newton_raphson_dice(lifted_dice_pos)
             q3.append(0.0)
-            
-            q4 = self.newton_raphson(initial_player_pos)
+
+            q4 = self.newton_raphson(initial_player_pos_raise)
             q4.append(0.0)
+            
+            q5 = self.newton_raphson(initial_player_pos)
+            q5.append(0.0)
 
             transitional = [(initial_player_pos[0] + final_player_pos[0]) / 2, (initial_player_pos[1] 
                                                                                 + final_player_pos[1]) / 2, 0.09] 
             qT = self.newton_raphson(transitional)
             qT.append(0.0)
             
-            q5 = self.newton_raphson(final_player_pos)
-            q5.append(0.0)
+            q6 = self.newton_raphson(final_player_pos)
+            q6.append(0.0)
 
             #going to dice
             segment1 = Segment()
@@ -199,17 +204,25 @@ class DemoNode(Node):
             drop_segment.t = Tmove
             self.seg_arr_msg.segments.append(drop_segment)
 
+            #moving to above player position
+            player_segment_raise = Segment()
+            player_segment_raise.p = q4
+            player_segment_raise.p[4] = 0.0
+            player_segment_raise.v = [0.0 for _ in player_segment_raise.p]
+            player_segment_raise.t = 2*Tmove
+            self.seg_arr_msg.segments.append(player_segment_raise)
+            
             #moving to player position
             player_segment = Segment()
-            player_segment.p = q4
+            player_segment.p = q5
             player_segment.p[4] = 0.0
             player_segment.v = [0.0 for _ in player_segment.p]
-            player_segment.t = 2*Tmove
+            player_segment.t = Tmove
             self.seg_arr_msg.segments.append(player_segment)
 
             #gripping player position
             lift_player_segment = Segment()
-            lift_player_segment.p = q4
+            lift_player_segment.p = q5
             lift_player_segment.p[4] = GRIPPER_CLOSE_PURPLE
             lift_player_segment.v = [0.0 for _ in lift_player_segment.p]
             lift_player_segment.t = Tmove
@@ -237,7 +250,7 @@ class DemoNode(Node):
 
             #placing player position
             second_transition_segment = Segment()
-            second_transition_segment.p = q5
+            second_transition_segment.p = q6
             second_transition_segment.p[4] = GRIPPER_CLOSE_PURPLE
             second_transition_segment.v = [0.0 for _ in drop_segment.p]
             second_transition_segment.t = Tmove
@@ -245,7 +258,7 @@ class DemoNode(Node):
 
             #releasing player position
             release_player_segment = Segment()
-            release_player_segment.p = q5
+            release_player_segment.p = q6
             release_player_segment.p[4] = 0.0
             release_player_segment.v = [0.0 for _ in drop_segment.p]
             release_player_segment.t = Tmove
@@ -381,55 +394,130 @@ class DemoNode(Node):
             
             
     def recv_box_array(self, msg):
-        if self.check_board == True:
-            self.box_arr_msg.box = []
+        #if self.check_board == True:
+        self.box_arr_msg.box = []
             
-            for box in msg.box:
-                self.box_arr_msg.box.append(box)
-                
-            w = 0.508
-            h = 0.514
-            # Calculate cell width & height (assuming a 10x10 board)
-            cell_width = w / 10
-            cell_height = h / 10    
-            x_mid = self.box_arr_msg.box[0]
-            y_mid = self.box_arr_msg.box[1]
+        for box in msg.box:
+            self.box_arr_msg.box.append(box)
+            
+        w = 0.508
+        h = 0.514
+        # Calculate cell width & height (assuming a 10x10 board)
+        cell_width = w / 10
+        cell_height = h / 10    
+        x_mid = self.box_arr_msg.box[0]
+        y_mid = self.box_arr_msg.box[1]
+        angle = self.box_arr_msg.box[2]
 
-            self.get_logger().info('Board Positions: %s, %s' % (x_mid, y_mid))
+        #self.get_logger().info('Board Positions: %s, %s, %s' % (x_mid, y_mid, angle))
 
-            self.board_positions = {}
-            for row in range(10):
-                for col in range(10):
-                    if col < 5:
-                        x_pos = x_mid - (4 - col) * cell_width - cell_width / 2
-                    else:
-                        x_pos = x_mid + (col - 5) * cell_width + cell_width / 2
+        #self.board_positions = {}
+        # for row in range(10):
+        #     for col in range(10):
+        #         if col < 5:
+        #             x_pos = x_mid - (((4 - col) * cell_width - cell_width / 2))*cos(np.radians(angle))
+        #         else:
+        #             x_pos = x_mid + ((col - 5) * cell_width + cell_width / 2)*cos(np.radians(angle))
 
-                    if row < 5:
-                        y_pos = y_mid - (4 - row) * cell_height - cell_height / 2
-                    else:
-                        y_pos = y_mid + (row - 5) * cell_height + cell_height / 2
+        #         if row < 5:
+        #             y_pos = y_mid - ((4 - row) * cell_height - cell_height / 2)*sin(np.radians(angle))
+        #         else:
+        #             y_pos = y_mid + ((row - 5) * cell_height + cell_height / 2)*sin(np.radians(angle))
 
-                    if row % 2 == 0:
-                        cell_number = 20 * (row // 2) + 1 + col
-                    else:
-                        cell_number = 20 * (((row - 1) // 2) + 1) - col
+        #         if row % 2 == 0:
+        #             cell_number = 20 * (row // 2) + 1 + col
+        #         else:
+        #             cell_number = 20 * (((row - 1) // 2) + 1) - col
+        
+        self.board_positions = {}
+        for row in range(5):
+            for col in range(5):
+                x_pos_og = (x_mid - ((4 - col)*cell_width + cell_width/2))
+                y_pos_og = (y_mid - ((4 - row)*cell_height + cell_height/2)) 
+                x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
+                y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                if row == 0:
+                    cell_number = col + 1
+                elif row == 1:
+                    cell_number = 20 - col
+                elif row == 2:
+                    cell_number = 21 + col
+                elif row == 3:
+                    cell_number = 40 - col
+                elif row == 4:
+                    cell_number = 41 + col
+                self.board_positions[cell_number] = (x_pos, y_pos)
+        
+        for row in range(5):
+            for col in range(5, 10):
+                x_pos_og = x_mid + (col - 5) * cell_width + cell_width/2
+                y_pos_og = y_mid - (4 - row) * cell_height - cell_height/2
+                x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
+                y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                if row == 0:
+                    cell_number = col + 1
+                elif row == 1:
+                    cell_number = 20 - col
+                elif row == 2:
+                    cell_number = 21 + col
+                elif row == 3:
+                    cell_number = 40 - col
+                elif row == 4:
+                    cell_number = 41 + col
+                self.board_positions[cell_number] = (x_pos, y_pos)
+        
+        for row in range(5, 10):
+            for col in range(5, 10):
+                x_pos_og = x_mid + (col - 5) * cell_width + cell_width/2
+                y_pos_og = y_mid + (row - 5) * cell_height + cell_height/2
+                x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
+                y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                if row == 5:
+                    cell_number = 60 - col 
+                elif row == 6:
+                    cell_number = 61 + col
+                elif row == 7:
+                    cell_number = 80 - col
+                elif row == 8:
+                    cell_number = 81 + col
+                elif row == 9:
+                    cell_number = 100 - col
+                self.board_positions[cell_number] = (x_pos, y_pos)
+        
+        for row in range(5, 10):
+            for col in range(5):
+                #x_pos = x_mid - (((4 - col)*cell_width - cell_width/2)*np.cos(np.radians(angle)) + ((row - 5) * (cell_height + cell_height/2)*np.sin(np.radians(angle))))
+                #y_pos = y_mid + (((row - 5) * (cell_height + cell_height/2)*np.cos(np.radians(angle))) - ((4 - col)*cell_width - cell_width/2)*np.sin(np.radians(angle)))
+                x_pos_og = x_mid - ((4 - col)*cell_width + cell_width/2)
+                y_pos_og = y_mid + ((row - 5) *cell_height + cell_height/2)
+                x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
+                y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                if row == 5:
+                    cell_number = 60 - col 
+                elif row == 6:
+                    cell_number = 61 + col
+                elif row == 7:
+                    cell_number = 80 - col
+                elif row == 8:
+                    cell_number = 81 + col
+                elif row == 9:
+                    cell_number = 100 - col
 
-                    self.board_positions[cell_number] = (x_pos, y_pos)
+                self.board_positions[cell_number] = (x_pos, y_pos)
 
-            #self.get_logger().info('Board Positions: %s' % board_positions)
+        self.get_logger().info('Board Positions: %s' % self.board_positions)
 
-            # Define ladders manually (start → end)
-            ladders = {
-                8: 27, 21: 41, 32: 51, 54: 66, 70: 89,
-                77: 98
-            }
+        # Define ladders manually (start → end)
+        ladders = {
+            8: 27, 21: 41, 32: 51, 54: 66, 70: 89,
+            77: 98
+        }
 
-            # Define snakes manually (start → end)
-            snakes = {
-                15: 4, 29: 12, 46: 18, 68: 49, 79: 57,
-                95: 74
-            }
+        # Define snakes manually (start → end)
+        snakes = {
+            15: 4, 29: 12, 46: 18, 68: 49, 79: 57,
+            95: 74
+        }
 
 def main(args=None):
     rclpy.init(args=args)
