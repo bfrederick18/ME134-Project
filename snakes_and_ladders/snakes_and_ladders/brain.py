@@ -25,7 +25,9 @@ class DemoNode(Node):
         self.chain = KinematicChain(self, 'world', 'tip', JOINT_NAMES[0:4])
 
         self.waiting_msg = None
+        self.dice_roll = None
         self.check_board = False
+        self.received_dice_roll = False
         self.obj_arr_msg = ObjectArray()
         self.obj_arr_msg.objects = []
         self.point_array = []
@@ -33,6 +35,8 @@ class DemoNode(Node):
         self.seg_arr_msg.segments = []
         self.box_arr_msg = BoxArray()
         self.box_arr_msg.box = []
+        self.dice_face_msg = BoxArray()
+        self.dice_face_msg.box = []
         self.x_waiting = []
         self.actual_pos = []
         self.board_positions = {}
@@ -47,6 +51,10 @@ class DemoNode(Node):
             State, '/trajectory/state', self.recv_state, 1)
         self.sub_check = self.create_subscription(
             Num, '/trajectory/num', self.recv_check, 1)
+        self.sub_dice_roll = self.create_subscription(
+            Num, '/dice_detector/num', self.recv_dice_roll, 1)
+        self.sub_dice_array = self.create_subscription(
+            BoxArray, '/dice_detector/box_array', self.recv_dice_box_array, 1)
         
         self.get_logger().info('Brain running...')
 
@@ -106,6 +114,11 @@ class DemoNode(Node):
     def recv_state(self, msg):
         self.x_waiting = [msg.x_waiting_x, msg.x_waiting_y, msg.x_waiting_z]
         self.actual_pos = msg.actual_pos
+    
+    def recv_dice_roll(self,msg):
+        if msg.num is not None:
+            self.dice_roll = msg.num
+
 
 
     def create_seg(self, p, v=None, t=CYCLE / 2, gripper_val=0.0):
@@ -118,40 +131,257 @@ class DemoNode(Node):
 
 
     def recv_obj_array(self, msg):
-        self.obj_arr_msg.objects = []
+        if self.received_dice_roll == True:
+            self.obj_arr_msg.objects = []
 
-        for obj in msg.objects:
-            self.obj_arr_msg.objects.append(obj)
+            for obj in msg.objects:
+                self.obj_arr_msg.objects.append(obj)
 
-        for obj in self.obj_arr_msg.objects:
-            if obj.type == Object.DISK:
-                disc_world_msg = Point()
-                disc_world_msg.x = obj.x
-                disc_world_msg.y = obj.y
-                disc_world_msg.z = 0.012
-                self.point_array.append(disc_world_msg)
+            for obj in self.obj_arr_msg.objects:
+                if obj.type == Object.DISK:
+                    disc_world_msg = Point()
+                    disc_world_msg.x = obj.x
+                    disc_world_msg.y = obj.y
+                    disc_world_msg.z = 0.012
+                    self.point_array.append(disc_world_msg)
 
-        #self.get_logger().info('Objects: %s' % len(self.point_array))
+            #self.get_logger().info('Objects: %s' % len(self.point_array))
 
-        if len(self.point_array) > 0 and self.x_waiting != []:
+            if len(self.point_array) > 0 and self.x_waiting != []:
+                cart_points = [self.x_waiting]
+                
+                for pt in self.point_array:
+                    cart_points.append([pt.x, pt.y, pt.z + 0.04]) # PIECE POSITION
+                    cart_points.append([pt.x, pt.y, pt.z]) # PIECE POSITION
+                    if self.dice_roll is not None:
+                        cart_points.append([pt.x + (0.06)*self.dice_roll, pt.y, pt.z])  # MOVE PIECE TO NEXT SQUARE
+                        final_player_pos = cart_points[3]
+                self.point_array = [] 
+
+                Tmove = CYCLE / 2
+                
+                initial_player_pos_raise = cart_points[1]
+                initial_player_pos = cart_points[2]
+
+                q4 = self.newton_raphson(initial_player_pos_raise)
+                q4.append(0.0)
+                
+                q5 = self.newton_raphson(initial_player_pos)
+                q5.append(0.0)
+                
+                #moving to above player position
+                player_segment_raise = Segment()
+                player_segment_raise.p = q4
+                player_segment_raise.p[4] = 0.0
+                player_segment_raise.v = [0.0 for _ in player_segment_raise.p]
+                player_segment_raise.t = 2*Tmove
+                self.seg_arr_msg.segments.append(player_segment_raise)
+                
+                #moving to player position
+                player_segment = Segment()
+                player_segment.p = q5
+                player_segment.p[4] = 0.0
+                player_segment.v = [0.0 for _ in player_segment.p]
+                player_segment.t = Tmove
+                self.seg_arr_msg.segments.append(player_segment)
+
+                #gripping player position
+                lift_player_segment = Segment()
+                lift_player_segment.p = q5
+                lift_player_segment.p[4] = GRIPPER_CLOSE_PURPLE
+                lift_player_segment.v = [0.0 for _ in lift_player_segment.p]
+                lift_player_segment.t = Tmove
+                self.seg_arr_msg.segments.append(lift_player_segment)
+
+                if self.dice_roll is not None:
+                    transitional = [(initial_player_pos[0] + final_player_pos[0]) / 2, (initial_player_pos[1] 
+                                                                                        + final_player_pos[1]) / 2, 0.09] 
+                    qT = self.newton_raphson(transitional)
+                    qT.append(0.0)
+                    
+                    q6 = self.newton_raphson(final_player_pos)
+                    q6.append(0.0)
+
+                    dx = (transitional[0] - initial_player_pos[0])
+                    dy = (transitional[1] - initial_player_pos[1])
+                    v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
+
+                    (_, _, Jv, _) = self.chain.fkin(qT[0:4])
+                    J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
+                    v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
+                    qdotT = np.linalg.pinv(J) @ v_cart_stack
+                    qdotT = qdotT.flatten().tolist()
+                    qdotT.append(0.0)  # gripper
+
+
+                    #moving player position
+                    first_transition_segment = Segment()
+                    first_transition_segment.p = qT
+                    first_transition_segment.p[4] = GRIPPER_CLOSE_PURPLE
+                    first_transition_segment.v = qdotT 
+                    first_transition_segment.t = Tmove
+                    self.seg_arr_msg.segments.append(first_transition_segment)
+
+                    #placing player position
+                    second_transition_segment = Segment()
+                    second_transition_segment.p = q6
+                    second_transition_segment.p[4] = GRIPPER_CLOSE_PURPLE
+                    second_transition_segment.v = [0.0 for _ in second_transition_segment.p]
+                    second_transition_segment.t = Tmove
+                    self.seg_arr_msg.segments.append(second_transition_segment)
+
+                    #releasing player position
+                    release_player_segment = Segment()
+                    release_player_segment.p = q6
+                    release_player_segment.p[4] = 0.0
+                    release_player_segment.v = [0.0 for _ in release_player_segment.p]
+                    release_player_segment.t = Tmove
+                    self.seg_arr_msg.segments.append(release_player_segment)
+                
+                #waiting 
+                waiting_segment = Segment()
+                waiting_segment.p = WAITING_POS
+                waiting_segment.p[4] = 0.0
+                waiting_segment.v = [0.0 for _ in waiting_segment.p]
+                waiting_segment.t = Tmove * 2
+                self.seg_arr_msg.segments.append(waiting_segment)
+
+                #region
+                """
+                #self.get_logger().info('Cart points: %s' % cart_points)
+                p1 = cart_points[0]
+                p2 = cart_points[1]
+
+                transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.09]  # xyz
+
+                qT = self.newton_raphson_dice(transitional)
+                qT.append(0.0)  # gripper
+                q2 = self.newton_raphson_dice(p2)
+                q2.append(0.0)  # gripper
+
+                p3 = cart_points[2]
+                q2 = self.newton_raphson_dice(p2)
+                q3 = self.newton_raphson_dice(p3)
+
+                q2.append(0.0)  # gripper
+                q3.append(0.0)
+                #going to dice
+                segment = Segment()
+                segment.p = q2
+                segment.v = [0.0 for _ in segment.p]
+                segment.t = Tmove * 2
+                self.seg_arr_msg.segments.append(segment)
+                #gripping the dice
+                grip_segment = Segment()
+                grip_segment.p = q2
+                grip_segment.p[4] = GRIPPER_CLOSE_DICE
+                grip_segment.v = [0.0 for _ in grip_segment.p]
+                grip_segment.t = Tmove
+                self.seg_arr_msg.segments.append(grip_segment)
+                #lifting dice up
+                lift_segment = Segment()
+                lift_segment.p = q3
+                lift_segment.p[4] = GRIPPER_CLOSE_DICE
+                lift_segment.v = [0.0 for _ in lift_segment.p]
+                lift_segment.t = Tmove
+                self.seg_arr_msg.segments.append(lift_segment)
+                #dropping the dice
+                drop_segment = Segment()
+                drop_segment.p = q3
+                drop_segment.p[4] = 0.0
+                drop_segment.v = [0.0 for _ in drop_segment.p]
+                drop_segment.t = Tmove
+                self.seg_arr_msg.segments.append(drop_segment)
+
+                segment = Segment()
+                segment.p = WAITING_POS
+                segment.v = [0.0 for _ in segment.p]
+                segment.t = Tmove * 2
+                self.seg_arr_msg.segments.append(segment)
+
+                dx = (transitional[0] - p1[0])
+                dy = (transitional[1] - p1[1])
+                v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
+
+                (_, _, Jv, _) = self.chain.fkin(qT[0:4])
+                J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
+                v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
+                qdotT = np.linalg.pinv(J) @ v_cart_stack
+                qdotT = qdotT.flatten().tolist()
+                qdotT.append(0.0)  # gripper
+
+                release_segment = Segment()
+                release_segment.p = q2
+                release_segment.v = [0.0 for _ in release_segment.p]
+                release_segment.t = Tmove
+                self.seg_arr_msg.segments.append(release_segment)
+
+                seg1 = Segment()
+                seg1.p = q2
+                seg1.p[4] = GRIPPER_CLOSE_PURPLE
+                seg1.v = [0.0 for _ in seg2.p]
+                seg1.t = 2*Tmove
+
+                seg2 = Segment()
+                seg2.p = qT
+                seg2.p[4] = GRIPPER_CLOSE_PURPLE
+                seg2.v = qdotT
+                seg2.t = Tmove
+                
+                seg3 = Segment()
+                seg3.p = q2
+                seg3.p[4] = GRIPPER_CLOSE_PURPLE
+                seg3.v = [0.0 for _ in seg2.p]
+                seg3.t = 2*Tmove
+
+                seg4 = Segment()
+                seg4.p = q2
+                seg4.v = [0.0 for _ in seg3.p]
+                seg4.t = Tmove
+
+                self.seg_arr_msg.segments.append(seg1)
+                self.seg_arr_msg.segments.append(seg2)
+                self.seg_arr_msg.segments.append(seg3)
+                self.seg_arr_msg.segments.append(seg4)
+
+                segment = Segment()
+                segment.p = WAITING_POS
+                segment.v = [0.0 for _ in segment.p]
+                segment.t = Tmove * 2
+                self.seg_arr_msg.segments.append(segment)
+                """
+                #endregion
+
+                self.pub_segs.publish(self.seg_arr_msg)
+                #self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
+
+                self.seg_arr_msg.segments = []
+                self.received_dice_roll = False
+            else:
+                self.get_logger().debug('this sucks')
+    
+    def recv_check(self, msg):
+        self.waiting_msg = msg.num
+        if self.waiting_msg == 1:
+            self.check_board = True
+            self.received_dice_roll = True
+        else:
+            self.check_board = False
+            self.received_dice_roll = False
+            
+    def recv_dice_box_array(self, msg):
+        if self.received_dice_roll == False:
+            self.dice_face_msg.box = []
+            for box in msg.box:
+                self.dice_face_msg.box.append(box)
+            
             cart_points = [self.x_waiting]
-            cart_points.append([1.338, 0.301, 0.03])  # DICE HARDCODE DELETE LATER [1.321, 0.324, 0.03]
-            cart_points.append([1.338, 0.301, 0.09])  # LIFTED DICE POSITION (HARDCODE) [1.321, 0.324, 0.09]
-
-            for pt in self.point_array:
-                cart_points.append([pt.x, pt.y, pt.z + 0.04]) # PIECE POSITION
-                cart_points.append([pt.x, pt.y, pt.z]) # PIECE POSITION
-                cart_points.append([pt.x + 0.06, pt.y, pt.z])  # MOVE PIECE TO NEXT SQUARE
-            self.point_array = [] 
+            cart_points.append([self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.03])  
+            cart_points.append([self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.09])  
 
             Tmove = CYCLE / 2
-
-            waiting_pos = cart_points[0]
             dice_rest_pos = cart_points[1]
             lifted_dice_pos = cart_points[2]
-            initial_player_pos_raise = cart_points[3]
-            initial_player_pos = cart_points[4]
-            final_player_pos = cart_points[5]
 
             q2 = self.newton_raphson_dice(dice_rest_pos)
             q2.append(0.0)
@@ -159,25 +389,11 @@ class DemoNode(Node):
             q3 = self.newton_raphson_dice(lifted_dice_pos)
             q3.append(0.0)
 
-            q4 = self.newton_raphson(initial_player_pos_raise)
-            q4.append(0.0)
-            
-            q5 = self.newton_raphson(initial_player_pos)
-            q5.append(0.0)
-
-            transitional = [(initial_player_pos[0] + final_player_pos[0]) / 2, (initial_player_pos[1] 
-                                                                                + final_player_pos[1]) / 2, 0.09] 
-            qT = self.newton_raphson(transitional)
-            qT.append(0.0)
-            
-            q6 = self.newton_raphson(final_player_pos)
-            q6.append(0.0)
-
             #going to dice
             segment1 = Segment()
             segment1.p = q2
             segment1.v = [0.0 for _ in segment1.p]
-            segment1.t = Tmove 
+            segment1.t = 2*Tmove 
             self.seg_arr_msg.segments.append(segment1)
 
             #gripping the dice
@@ -204,66 +420,6 @@ class DemoNode(Node):
             drop_segment.t = Tmove
             self.seg_arr_msg.segments.append(drop_segment)
 
-            #moving to above player position
-            player_segment_raise = Segment()
-            player_segment_raise.p = q4
-            player_segment_raise.p[4] = 0.0
-            player_segment_raise.v = [0.0 for _ in player_segment_raise.p]
-            player_segment_raise.t = 2*Tmove
-            self.seg_arr_msg.segments.append(player_segment_raise)
-            
-            #moving to player position
-            player_segment = Segment()
-            player_segment.p = q5
-            player_segment.p[4] = 0.0
-            player_segment.v = [0.0 for _ in player_segment.p]
-            player_segment.t = Tmove
-            self.seg_arr_msg.segments.append(player_segment)
-
-            #gripping player position
-            lift_player_segment = Segment()
-            lift_player_segment.p = q5
-            lift_player_segment.p[4] = GRIPPER_CLOSE_PURPLE
-            lift_player_segment.v = [0.0 for _ in lift_player_segment.p]
-            lift_player_segment.t = Tmove
-            self.seg_arr_msg.segments.append(lift_player_segment)
-
-            dx = (transitional[0] - initial_player_pos[0])
-            dy = (transitional[1] - initial_player_pos[1])
-            v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
-
-            (_, _, Jv, _) = self.chain.fkin(qT[0:4])
-            J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
-            v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
-            qdotT = np.linalg.pinv(J) @ v_cart_stack
-            qdotT = qdotT.flatten().tolist()
-            qdotT.append(0.0)  # gripper
-
-
-            #moving player position
-            first_transition_segment = Segment()
-            first_transition_segment.p = qT
-            first_transition_segment.p[4] = GRIPPER_CLOSE_PURPLE
-            first_transition_segment.v = qdotT 
-            first_transition_segment.t = Tmove
-            self.seg_arr_msg.segments.append(first_transition_segment)
-
-            #placing player position
-            second_transition_segment = Segment()
-            second_transition_segment.p = q6
-            second_transition_segment.p[4] = GRIPPER_CLOSE_PURPLE
-            second_transition_segment.v = [0.0 for _ in drop_segment.p]
-            second_transition_segment.t = Tmove
-            self.seg_arr_msg.segments.append(second_transition_segment)
-
-            #releasing player position
-            release_player_segment = Segment()
-            release_player_segment.p = q6
-            release_player_segment.p[4] = 0.0
-            release_player_segment.v = [0.0 for _ in drop_segment.p]
-            release_player_segment.t = Tmove
-            self.seg_arr_msg.segments.append(release_player_segment)
-            
             #waiting 
             waiting_segment = Segment()
             waiting_segment.p = WAITING_POS
@@ -272,127 +428,12 @@ class DemoNode(Node):
             waiting_segment.t = Tmove * 2
             self.seg_arr_msg.segments.append(waiting_segment)
 
-            #region
-            """
-            #self.get_logger().info('Cart points: %s' % cart_points)
-            p1 = cart_points[0]
-            p2 = cart_points[1]
-
-            transitional = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, 0.09]  # xyz
-
-            qT = self.newton_raphson_dice(transitional)
-            qT.append(0.0)  # gripper
-            q2 = self.newton_raphson_dice(p2)
-            q2.append(0.0)  # gripper
-
-            p3 = cart_points[2]
-            q2 = self.newton_raphson_dice(p2)
-            q3 = self.newton_raphson_dice(p3)
-
-            q2.append(0.0)  # gripper
-            q3.append(0.0)
-            #going to dice
-            segment = Segment()
-            segment.p = q2
-            segment.v = [0.0 for _ in segment.p]
-            segment.t = Tmove * 2
-            self.seg_arr_msg.segments.append(segment)
-            #gripping the dice
-            grip_segment = Segment()
-            grip_segment.p = q2
-            grip_segment.p[4] = GRIPPER_CLOSE_DICE
-            grip_segment.v = [0.0 for _ in grip_segment.p]
-            grip_segment.t = Tmove
-            self.seg_arr_msg.segments.append(grip_segment)
-            #lifting dice up
-            lift_segment = Segment()
-            lift_segment.p = q3
-            lift_segment.p[4] = GRIPPER_CLOSE_DICE
-            lift_segment.v = [0.0 for _ in lift_segment.p]
-            lift_segment.t = Tmove
-            self.seg_arr_msg.segments.append(lift_segment)
-            #dropping the dice
-            drop_segment = Segment()
-            drop_segment.p = q3
-            drop_segment.p[4] = 0.0
-            drop_segment.v = [0.0 for _ in drop_segment.p]
-            drop_segment.t = Tmove
-            self.seg_arr_msg.segments.append(drop_segment)
-
-            segment = Segment()
-            segment.p = WAITING_POS
-            segment.v = [0.0 for _ in segment.p]
-            segment.t = Tmove * 2
-            self.seg_arr_msg.segments.append(segment)
-
-            dx = (transitional[0] - p1[0])
-            dy = (transitional[1] - p1[1])
-            v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
-
-            (_, _, Jv, _) = self.chain.fkin(qT[0:4])
-            J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
-            v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
-            qdotT = np.linalg.pinv(J) @ v_cart_stack
-            qdotT = qdotT.flatten().tolist()
-            qdotT.append(0.0)  # gripper
-
-            release_segment = Segment()
-            release_segment.p = q2
-            release_segment.v = [0.0 for _ in release_segment.p]
-            release_segment.t = Tmove
-            self.seg_arr_msg.segments.append(release_segment)
-
-            seg1 = Segment()
-            seg1.p = q2
-            seg1.p[4] = GRIPPER_CLOSE_PURPLE
-            seg1.v = [0.0 for _ in seg2.p]
-            seg1.t = 2*Tmove
-
-            seg2 = Segment()
-            seg2.p = qT
-            seg2.p[4] = GRIPPER_CLOSE_PURPLE
-            seg2.v = qdotT
-            seg2.t = Tmove
-            
-            seg3 = Segment()
-            seg3.p = q2
-            seg3.p[4] = GRIPPER_CLOSE_PURPLE
-            seg3.v = [0.0 for _ in seg2.p]
-            seg3.t = 2*Tmove
-
-            seg4 = Segment()
-            seg4.p = q2
-            seg4.v = [0.0 for _ in seg3.p]
-            seg4.t = Tmove
-
-            self.seg_arr_msg.segments.append(seg1)
-            self.seg_arr_msg.segments.append(seg2)
-            self.seg_arr_msg.segments.append(seg3)
-            self.seg_arr_msg.segments.append(seg4)
-
-            segment = Segment()
-            segment.p = WAITING_POS
-            segment.v = [0.0 for _ in segment.p]
-            segment.t = Tmove * 2
-            self.seg_arr_msg.segments.append(segment)
-            """
-            #endregion
-
             self.pub_segs.publish(self.seg_arr_msg)
-            #self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
-
             self.seg_arr_msg.segments = []
-        else:
-            self.get_logger().debug('this sucks')
-    
-    def recv_check(self, msg):
-        self.waiting_msg = msg.num
-        if self.waiting_msg == 1:
-            self.check_board = True
-        else:
-            self.check_board = False
-            
-            
+
+            self.received_dice_roll = True
+
+
     def recv_box_array(self, msg):
         #if self.check_board == True:
         self.box_arr_msg.box = []
@@ -505,7 +546,7 @@ class DemoNode(Node):
 
                 self.board_positions[cell_number] = (x_pos, y_pos)
 
-        self.get_logger().info('Board Positions: %s' % self.board_positions)
+        #self.get_logger().info('Board Positions: %s' % self.board_positions)
 
         # Define ladders manually (start → end)
         ladders = {
