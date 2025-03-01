@@ -83,7 +83,7 @@ class DetectorNode(Node):
             area = cv2.contourArea(contour)
             if area > 500 and area < 3000:  # Adjust area threshold as needed
                 rotatedRectangle = cv2.minAreaRect(contour)
-                self.get_logger().info("Rotated Rectangle: %s" % rotatedRectangle.__str__())
+                #self.get_logger().info("Rotated Rectangle: %s" % rotatedRectangle.__str__())
                 ((x, y), (w, h), angle) = rotatedRectangle
                 box = np.int0(cv2.boxPoints(rotatedRectangle))
                 cv2.drawContours(frame, [box], 0, (0, 0, 255), 1)
@@ -128,7 +128,7 @@ class DetectorNode(Node):
             # Ensure at least some circles were found
             if circles is not None:
                 circles = np.round(circles[0, :]).astype("int")
-                self.get_logger().info("Circle radiuses: %s" % circles)
+                #self.get_logger().info("Circle radiuses: %s" % circles)
 
                 # Draw the circles
                 for (cx, cy, r) in circles:

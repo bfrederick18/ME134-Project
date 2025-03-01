@@ -76,7 +76,7 @@ class DetectorNode(Node):
         # self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
         self.pub_board.publish(self.bridge.cv2_to_imgmsg(edges))
 
-        #self.get_logger().info('Angle: %s' % angle)
+        self.get_logger().info('Angle: %s' % angle)
 
         return(um, vm, wm, hm, angle)   
 
@@ -88,7 +88,7 @@ class DetectorNode(Node):
             cv2.aruco.drawDetectedMarkers(image, markerCorners, markerIds)
 
         if (markerIds is None or len(markerIds) != 4 or set(markerIds.flatten()) != set([1,2,3,4])):
-            self.get_logger().debug('Not all markers detected: %s' % markerIds.flatten())
+            self.get_logger().debug('Not all markers detected')
             return None
         
         for i, marker_id in enumerate(markerIds.flatten()):
@@ -141,16 +141,6 @@ class DetectorNode(Node):
             return
         elif old_M is not None and not np.allclose(self.M, old_M):
             self.get_logger().info('Calibration updated')
-
-        # # Help to determine the HSV range...
-        # if True:
-        #     # Draw the center lines.  Note the row is the first dimension.
-        #     frame = cv2.line(frame, (uc,0), (uc,H-1), self.white, 1)
-        #     frame = cv2.line(frame, (0,vc), (W-1,vc), self.white, 1)
-
-        #     # Report the center HSV values.  Note the row comes first.
-        #     self.get_logger().info(
-        #         "HSV = (%3d, %3d, %3d)" % tuple(hsv[vc, uc]))
 
         iter = 2
         binary = cv2.erode(binary, None, iterations=iter)

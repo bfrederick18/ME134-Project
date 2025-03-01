@@ -233,9 +233,9 @@ class DemoNode(Node):
             
             else:
                 qd, qddot = WAITING_POS, [0.0 for _ in WAITING_POS]
-                self.get_logger().info('WAITING')
+                self.get_logger().info('GAME START')
                 self.set_mode(Mode.WAITING)
-                self.waiting_msg.num = 1
+                self.waiting_msg.num = 2
 
         elif self.mode is Mode.POINTING:
             if self.spline and ((self.t - self.spline.t0) > self.spline.T or self.abort):

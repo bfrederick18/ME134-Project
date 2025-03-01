@@ -36,6 +36,7 @@ class DemoNode(Node):
         self.waiting_msg = None
         self.dice_roll = None
         self.check_board = False
+        self.obt_board_positions = False
         self.received_dice_roll = False
         self.obj_arr_msg = ObjectArray()
         self.obj_arr_msg.objects = []
@@ -53,6 +54,7 @@ class DemoNode(Node):
         self.counter = 0
         self.num_pub_dice = 1
         self.num_pub_player = 1
+        self.reset = False
 
         self.pub_segs = self.create_publisher(SegmentArray, name + '/segment_array', 1)
         self.board_location = self.create_subscription(
@@ -79,7 +81,7 @@ class DemoNode(Node):
         J_dict = {
             'vertical': np.array([0, 1, -1, 1]).reshape(1,4),
             'dice_bowl': np.array([0, 1.5, 1, 1]).reshape(1,4),
-            'horizontal': np.array([0, 2, 3, 1]).reshape(1,4)  # not quite :(  I DONT KNOW HOW TO TUNE PLZ PAYAL HELP
+            'horizontal': np.array([0, 3.0, 1, 1]).reshape(1,4)  # not quite :(  I DONT KNOW HOW TO TUNE PLZ PAYAL HELP
         }
 
         x_distance = []
@@ -130,13 +132,101 @@ class DemoNode(Node):
                 self.received_dice_roll = False
                 self.num_pub_dice = 0
             self.get_logger().info('Counter: %s' % self.counter)
-        else:
-            self.check_board = False
+        elif self.waiting_msg == 2:
+            self.check_board = True
+            self.reset = True
+        # else:
+        #     self.check_board = False
             #self.received_dice_roll = False
 
 
     def recv_obj_array(self, msg):
-        if self.received_dice_roll == True and self.counter % 2 == 0 and self.num_pub_player == 0:
+        if self.reset == True and self.obt_board_positions == True:
+            self.get_logger().debug('resetting player position')
+            self.obj_arr_msg.objects = []
+
+            for obj in msg.objects:
+                self.obj_arr_msg.objects.append(obj)
+
+            for obj in self.obj_arr_msg.objects:
+                if obj.type == Object.DISK:
+                    disc_world_msg = Point()
+                    disc_world_msg.x = obj.x
+                    disc_world_msg.y = obj.y
+                    disc_world_msg.z = 0.012
+                    self.point_array.append(disc_world_msg)
+
+            if len(self.point_array) > 0 and self.x_waiting != []:
+                cart_points = [self.x_waiting]
+                
+                for pt in self.point_array:
+                    cart_points.append([pt.x, pt.y, pt.z + 0.10]) # PIECE POSITION
+                    cart_points.append([pt.x, pt.y, pt.z]) # PIECE POSITION
+                    self.get_logger().info('Reset point: %s, %s, %s' % (self.board_positions[1][0], self.board_positions[1][1], pt.z))
+                    if self.board_positions[1][1] < 0.25:
+                        cart_points.append([0.497, 0.271, pt.z])
+                    else:
+                        cart_points.append([self.board_positions[1][0], self.board_positions[1][1], pt.z])
+                self.point_array = [] 
+
+                Tmove = CYCLE / 2
+                
+                initial_player_pos_raise = cart_points[1]
+                initial_player_pos = cart_points[2]
+                reset_player_pos = cart_points[3]
+
+                q4 = self.newton_raphson(initial_player_pos_raise)
+                q5 = self.newton_raphson(initial_player_pos)
+                
+                self.seg_arr_msg.segments.append(create_seg(q4, t=2 * Tmove))  # above player position
+                self.seg_arr_msg.segments.append(create_seg(q5))  # moving to player position
+                self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
+
+
+                transitional = [(initial_player_pos[0] + reset_player_pos[0]) / 2, (initial_player_pos[1] 
+                                                                                    + reset_player_pos[1]) / 2, 0.09] 
+                qT = self.newton_raphson(transitional)
+                q6 = self.newton_raphson(reset_player_pos)
+
+                dx = (transitional[0] - initial_player_pos[0])
+                dy = (transitional[1] - initial_player_pos[1])
+                v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
+
+                (_, _, Jv, _) = self.chain.fkin(qT[0:4])
+                J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
+                v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
+                qdotT = np.linalg.pinv(J) @ v_cart_stack
+                qdotT = qdotT.flatten().tolist()
+                qdotT.append(0.0)  # gripper
+
+                self.seg_arr_msg.segments.append(create_seg(qT, v=qdotT, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
+                self.seg_arr_msg.segments.append(create_seg(q6, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # placing player position
+
+                #releasing player position
+                release_player_segment = Segment()
+                release_player_segment.p = q6
+                release_player_segment.p[4] = 0.0
+                release_player_segment.v = [0.0 for _ in release_player_segment.p]
+                release_player_segment.t = Tmove
+                self.seg_arr_msg.segments.append(release_player_segment)
+                
+                #waiting 
+                waiting_segment = Segment()
+                waiting_segment.p = WAITING_POS
+                waiting_segment.p[4] = 0.0
+                waiting_segment.v = [0.0 for _ in waiting_segment.p]
+                waiting_segment.t = Tmove * 2
+                self.seg_arr_msg.segments.append(waiting_segment)
+
+                self.pub_segs.publish(self.seg_arr_msg)
+                self.num_pub_player += 1
+                #self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
+
+                self.seg_arr_msg.segments = []
+
+                self.reset = False
+            
+        elif self.received_dice_roll == True and self.counter % 2 == 0 and self.num_pub_player == 0:
             self.get_logger().debug('going to player')
             self.obj_arr_msg.objects = []
 
@@ -173,7 +263,7 @@ class DemoNode(Node):
                 q5 = self.newton_raphson(initial_player_pos)
                 
                 self.seg_arr_msg.segments.append(create_seg(q4, t=2 * Tmove))  # above player position
-                self.seg_arr_msg.segments.append(create_seg(q5))  # moving to player position
+                self.seg_arr_msg.segments.append(create_seg(q5, t = Tmove))  # moving to player position
                 self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
 
                 if self.dice_roll is not None:
@@ -214,7 +304,7 @@ class DemoNode(Node):
 
                 self.pub_segs.publish(self.seg_arr_msg)
                 self.num_pub_player += 1
-                self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
+                #self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
 
                 self.seg_arr_msg.segments = []
                 #self.received_dice_roll = False
@@ -234,7 +324,8 @@ class DemoNode(Node):
             lifted_dice_pos = [1.338, 0.301, 0.11]
 
             q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
-            q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='dice_bowl')
+            q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
+            #q_dice_drop[3] = -np.pi/2
             
             self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2 * Tmove))  # going to dice
             self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # gripping the dice
@@ -251,130 +342,135 @@ class DemoNode(Node):
 
 
     def recv_box_array(self, msg):
-        #if self.check_board == True:
-        self.box_arr_msg.box = []
+        if self.check_board == True:
+            self.box_arr_msg.box = []
+                
+            for box in msg.box:
+                self.box_arr_msg.box.append(box)
+                
+            w = 0.508
+            h = 0.514
+            # Calculate cell width & height (assuming a 10x10 board)
+            cell_width = w / 10
+            cell_height = h / 10    
+            x_mid = self.box_arr_msg.box[0]
+            y_mid = self.box_arr_msg.box[1]
+            angle = self.box_arr_msg.box[2]
+
+            #self.get_logger().info('Board Positions: %s, %s, %s' % (x_mid, y_mid, angle))
+
+            #self.board_positions = {}
+            # for row in range(10):
+            #     for col in range(10):
+            #         if col < 5:
+            #             x_pos = x_mid - (((4 - col) * cell_width - cell_width / 2))*cos(np.radians(angle))
+            #         else:
+            #             x_pos = x_mid + ((col - 5) * cell_width + cell_width / 2)*cos(np.radians(angle))
+
+            #         if row < 5:
+            #             y_pos = y_mid - ((4 - row) * cell_height - cell_height / 2)*sin(np.radians(angle))
+            #         else:
+            #             y_pos = y_mid + ((row - 5) * cell_height + cell_height / 2)*sin(np.radians(angle))
+
+            #         if row % 2 == 0:
+            #             cell_number = 20 * (row // 2) + 1 + col
+            #         else:
+            #             cell_number = 20 * (((row - 1) // 2) + 1) - col
             
-        for box in msg.box:
-            self.box_arr_msg.box.append(box)
+            self.board_positions = {}
+            for row in range(5):
+                for col in range(5):
+                    x_pos_og = (x_mid - ((4 - col)*cell_width + cell_width/2))
+                    y_pos_og = (y_mid - ((4 - row)*cell_height + cell_height/2)) 
+                    x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
+                    y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                    if row == 0:
+                        cell_number = col + 1
+                    elif row == 1:
+                        cell_number = 20 - col
+                    elif row == 2:
+                        cell_number = 21 + col
+                    elif row == 3:
+                        cell_number = 40 - col
+                    elif row == 4:
+                        cell_number = 41 + col
+                    self.board_positions[cell_number] = (x_pos, y_pos)
             
-        w = 0.508
-        h = 0.514
-        # Calculate cell width & height (assuming a 10x10 board)
-        cell_width = w / 10
-        cell_height = h / 10    
-        x_mid = self.box_arr_msg.box[0]
-        y_mid = self.box_arr_msg.box[1]
-        angle = self.box_arr_msg.box[2]
+            for row in range(5):
+                for col in range(5, 10):
+                    x_pos_og = x_mid + (col - 5) * cell_width + cell_width/2
+                    y_pos_og = y_mid - (4 - row) * cell_height - cell_height/2
+                    x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
+                    y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                    if row == 0:
+                        cell_number = col + 1
+                    elif row == 1:
+                        cell_number = 20 - col
+                    elif row == 2:
+                        cell_number = 21 + col
+                    elif row == 3:
+                        cell_number = 40 - col
+                    elif row == 4:
+                        cell_number = 41 + col
+                    self.board_positions[cell_number] = (x_pos, y_pos)
+            
+            for row in range(5, 10):
+                for col in range(5, 10):
+                    x_pos_og = x_mid + (col - 5) * cell_width + cell_width/2
+                    y_pos_og = y_mid + (row - 5) * cell_height + cell_height/2
+                    x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
+                    y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                    if row == 5:
+                        cell_number = 60 - col 
+                    elif row == 6:
+                        cell_number = 61 + col
+                    elif row == 7:
+                        cell_number = 80 - col
+                    elif row == 8:
+                        cell_number = 81 + col
+                    elif row == 9:
+                        cell_number = 100 - col
+                    self.board_positions[cell_number] = (x_pos, y_pos)
+            
+            for row in range(5, 10):
+                for col in range(5):
+                    #x_pos = x_mid - (((4 - col)*cell_width - cell_width/2)*np.cos(np.radians(angle)) + ((row - 5) * (cell_height + cell_height/2)*np.sin(np.radians(angle))))
+                    #y_pos = y_mid + (((row - 5) * (cell_height + cell_height/2)*np.cos(np.radians(angle))) - ((4 - col)*cell_width - cell_width/2)*np.sin(np.radians(angle)))
+                    x_pos_og = x_mid - ((4 - col)*cell_width + cell_width/2)
+                    y_pos_og = y_mid + ((row - 5) *cell_height + cell_height/2)
+                    x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
+                    y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                    if row == 5:
+                        cell_number = 60 - col 
+                    elif row == 6:
+                        cell_number = 61 + col
+                    elif row == 7:
+                        cell_number = 80 - col
+                    elif row == 8:
+                        cell_number = 81 + col
+                    elif row == 9:
+                        cell_number = 100 - col
 
-        #self.get_logger().info('Board Positions: %s, %s, %s' % (x_mid, y_mid, angle))
+                    self.board_positions[cell_number] = (x_pos, y_pos)
 
-        #self.board_positions = {}
-        # for row in range(10):
-        #     for col in range(10):
-        #         if col < 5:
-        #             x_pos = x_mid - (((4 - col) * cell_width - cell_width / 2))*cos(np.radians(angle))
-        #         else:
-        #             x_pos = x_mid + ((col - 5) * cell_width + cell_width / 2)*cos(np.radians(angle))
+            #self.get_logger().info('Board Positions: %s' % self.board_positions)
 
-        #         if row < 5:
-        #             y_pos = y_mid - ((4 - row) * cell_height - cell_height / 2)*sin(np.radians(angle))
-        #         else:
-        #             y_pos = y_mid + ((row - 5) * cell_height + cell_height / 2)*sin(np.radians(angle))
+            # Define ladders manually (start → end)
+            ladders = {
+                8: 27, 21: 41, 32: 51, 54: 66, 70: 89,
+                77: 98
+            }
 
-        #         if row % 2 == 0:
-        #             cell_number = 20 * (row // 2) + 1 + col
-        #         else:
-        #             cell_number = 20 * (((row - 1) // 2) + 1) - col
-        
-        self.board_positions = {}
-        for row in range(5):
-            for col in range(5):
-                x_pos_og = (x_mid - ((4 - col)*cell_width + cell_width/2))
-                y_pos_og = (y_mid - ((4 - row)*cell_height + cell_height/2)) 
-                x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
-                y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
-                if row == 0:
-                    cell_number = col + 1
-                elif row == 1:
-                    cell_number = 20 - col
-                elif row == 2:
-                    cell_number = 21 + col
-                elif row == 3:
-                    cell_number = 40 - col
-                elif row == 4:
-                    cell_number = 41 + col
-                self.board_positions[cell_number] = (x_pos, y_pos)
-        
-        for row in range(5):
-            for col in range(5, 10):
-                x_pos_og = x_mid + (col - 5) * cell_width + cell_width/2
-                y_pos_og = y_mid - (4 - row) * cell_height - cell_height/2
-                x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
-                y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
-                if row == 0:
-                    cell_number = col + 1
-                elif row == 1:
-                    cell_number = 20 - col
-                elif row == 2:
-                    cell_number = 21 + col
-                elif row == 3:
-                    cell_number = 40 - col
-                elif row == 4:
-                    cell_number = 41 + col
-                self.board_positions[cell_number] = (x_pos, y_pos)
-        
-        for row in range(5, 10):
-            for col in range(5, 10):
-                x_pos_og = x_mid + (col - 5) * cell_width + cell_width/2
-                y_pos_og = y_mid + (row - 5) * cell_height + cell_height/2
-                x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
-                y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
-                if row == 5:
-                    cell_number = 60 - col 
-                elif row == 6:
-                    cell_number = 61 + col
-                elif row == 7:
-                    cell_number = 80 - col
-                elif row == 8:
-                    cell_number = 81 + col
-                elif row == 9:
-                    cell_number = 100 - col
-                self.board_positions[cell_number] = (x_pos, y_pos)
-        
-        for row in range(5, 10):
-            for col in range(5):
-                #x_pos = x_mid - (((4 - col)*cell_width - cell_width/2)*np.cos(np.radians(angle)) + ((row - 5) * (cell_height + cell_height/2)*np.sin(np.radians(angle))))
-                #y_pos = y_mid + (((row - 5) * (cell_height + cell_height/2)*np.cos(np.radians(angle))) - ((4 - col)*cell_width - cell_width/2)*np.sin(np.radians(angle)))
-                x_pos_og = x_mid - ((4 - col)*cell_width + cell_width/2)
-                y_pos_og = y_mid + ((row - 5) *cell_height + cell_height/2)
-                x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
-                y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
-                if row == 5:
-                    cell_number = 60 - col 
-                elif row == 6:
-                    cell_number = 61 + col
-                elif row == 7:
-                    cell_number = 80 - col
-                elif row == 8:
-                    cell_number = 81 + col
-                elif row == 9:
-                    cell_number = 100 - col
-
-                self.board_positions[cell_number] = (x_pos, y_pos)
-
-        #self.get_logger().info('Board Positions: %s' % self.board_positions)
-
-        # Define ladders manually (start → end)
-        ladders = {
-            8: 27, 21: 41, 32: 51, 54: 66, 70: 89,
-            77: 98
-        }
-
-        # Define snakes manually (start → end)
-        snakes = {
-            15: 4, 29: 12, 46: 18, 68: 49, 79: 57,
-            95: 74
-        }
+            # Define snakes manually (start → end)
+            snakes = {
+                15: 4, 29: 12, 46: 18, 68: 49, 79: 57,
+                95: 74
+            }
+            if len(self.board_positions) != 0:
+                self.obt_board_positions = True
+                self.check_board = False
+        else:
+            self.board_positions = self.board_positions
 
 def main(args=None):
     rclpy.init(args=args)
