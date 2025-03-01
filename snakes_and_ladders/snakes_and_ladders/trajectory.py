@@ -261,7 +261,7 @@ class DemoNode(Node):
                 qd, qddot = WAITING_POS, [0.0 for _ in WAITING_POS]
                 self.waiting_msg.num = 1
 
-            if abs(dist(self.actual_pos, qd)) > 0.1:
+            if abs(dist(self.actual_pos, qd)) > 0.2:
                 self.spline = None
 
                 a_seg = Segment()

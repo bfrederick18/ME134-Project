@@ -82,14 +82,13 @@ class DetectorNode(Node):
 
     
     def calibrate(self, image, x0, y0, annotateImage=True): 
-
         markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
             image, cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
         if annotateImage:
             cv2.aruco.drawDetectedMarkers(image, markerCorners, markerIds)
 
         if (markerIds is None or len(markerIds) != 4 or set(markerIds.flatten()) != set([1,2,3,4])):
-            self.get_logger().debug('Not all markers detected')
+            self.get_logger().debug('Not all markers detected: %s' % markerIds.flatten())
             return None
         
         for i, marker_id in enumerate(markerIds.flatten()):
@@ -133,10 +132,15 @@ class DetectorNode(Node):
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         binary = cv2.inRange(hsv, HSV_LIMITS_PURPLE[:, 0], HSV_LIMITS_PURPLE[:, 1])
 
+        old_M = self.M
         self.calibrate(frame, self.x0, self.y0, annotateImage=True)
         if type(self.M) is not np.ndarray:
             self.get_logger().debug('Calibration failed')
+            self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
+            self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))
             return
+        elif old_M is not None and not np.allclose(self.M, old_M):
+            self.get_logger().info('Calibration updated')
 
         # # Help to determine the HSV range...
         # if True:

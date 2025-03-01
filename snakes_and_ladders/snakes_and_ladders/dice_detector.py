@@ -26,8 +26,7 @@ class DetectorNode(Node):
 
     def __init__(self, name):
         super().__init__(name)
-
-        #self.hsvlimits = np.array([[10, 40], [60, 220], [125, 255]])
+        self.get_logger().info("Name: %s" % name)
 
         self.die_roll = 0
         self.counter = 0
@@ -39,36 +38,35 @@ class DetectorNode(Node):
 
         self.M = None
         self.initial_positions = {}
-
         self.dice_roll_rounded = 0
-
-        self.pubrgb = self.create_publisher(Image, name +'/image_raw', 3)
-        
-        self.get_logger().info("Name: %s" % name)
-
+        self.dice_roll = Num()
+        self.box_array = BoxArray()
         self.bridge = cv_bridge.CvBridge()
 
+        self.pubrgb = self.create_publisher(Image, name +'/image_raw', 3)
+        self.pub_dice_face_gray = self.create_publisher(Image, name + '/dice_face_gray', 3)
+        self.pub_dice_face_blurred = self.create_publisher(Image, name + '/dice_face_blurred', 3)
+        self.pub_dice_face_thresh = self.create_publisher(Image, name + '/dice_face_thresh', 3)
+        self.pub_dice_number_gray = self.create_publisher(Image, name + '/dice_number_gray', 3)
+        self.pub_dice_number_blurred = self.create_publisher(Image, name + '/dice_number_blurred', 3)
+        self.pub_dice_number_roi = self.create_publisher(Image, name + '/dice_number_roi', 3)
         self.pub_roll = self.create_publisher(Int16, name + '/int16', 1)
+        self.dice_roll_pub = self.create_publisher(Num, name + '/num', 1)
+        self.pub_box_array = self.create_publisher(BoxArray, name + '/box_array', 1)
 
         self.sub = self.create_subscription(
             Image, '/image_raw', self.process, 1)
-        
-        self.dice_roll = Num()
-        self.dice_roll_pub = self.create_publisher(Num, name + '/num', 1)
-
-        self.box_array = BoxArray()
-        self.pub_box_array = self.create_publisher(BoxArray, name + '/box_array', 1)
-
 
 
     def shutdown(self):
         self.destroy_node()
     
+
     def detect_dice_face(self, frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # Apply Gaussian blur
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)  # positive and odd kernel size
 
         # Threshold the image
         _, thresh = cv2.threshold(blurred, 170, 250, cv2.THRESH_BINARY)
@@ -76,16 +74,22 @@ class DetectorNode(Node):
         # Find contours
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
+        self.pub_dice_face_gray.publish(self.bridge.cv2_to_imgmsg(gray, "mono8"))
+        self.pub_dice_face_blurred.publish(self.bridge.cv2_to_imgmsg(blurred, "mono8"))
+        self.pub_dice_face_thresh.publish(self.bridge.cv2_to_imgmsg(thresh, "mono8"))
+
         # Filter contours and draw bounding box
         for contour in contours:
             area = cv2.contourArea(contour)
             if area > 500 and area < 3000:  # Adjust area threshold as needed
                 rotatedRectangle = cv2.minAreaRect(contour)
-                ((x, y), (w, h), angle) = cv2.minAreaRect(contour)
+                self.get_logger().info("Rotated Rectangle: %s" % rotatedRectangle.__str__())
+                ((x, y), (w, h), angle) = rotatedRectangle
                 box = np.int0(cv2.boxPoints(rotatedRectangle))
-                cv2.drawContours(frame, [box], 0, (0, 0, 255), 2)
-                #cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.drawContours(frame, [box], 0, (0, 0, 255), 1)
+                # cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 return (x, y, w, h)
+
 
     def detect_die_number(self, frame):
         # Detect the die face
@@ -95,6 +99,8 @@ class DetectorNode(Node):
         else:
             x, y, w, h = dice_face
 
+            w += 10
+            h += 10
             w, h = max(1, int(w)), max(1, int(h))
 
             # Compute ROI coordinates
@@ -110,23 +116,30 @@ class DetectorNode(Node):
             gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
 
             # Apply Gaussian blur
-            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            # blurred = cv2.GaussianBlur(gray, (3, 3), 0)
 
             # Apply Hough Circle Transform
-            circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 0.5, 3,
-                                    param1=30, param2=17, minRadius=1, maxRadius=10)
+            circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 0.5, 3,
+                                    param1=30, param2=17, minRadius=3, maxRadius=10)
+            
+            self.pub_dice_number_gray.publish(self.bridge.cv2_to_imgmsg(gray, "mono8"))
+            # self.pub_dice_number_blurred.publish(self.bridge.cv2_to_imgmsg(blurred, "mono8"))
 
             # Ensure at least some circles were found
             if circles is not None:
                 circles = np.round(circles[0, :]).astype("int")
+                self.get_logger().info("Circle radiuses: %s" % circles)
 
                 # Draw the circles
                 for (cx, cy, r) in circles:
                     cv2.circle(roi, (cx, cy), r, (0, 255, 0), 2)
+                    # pass
 
+                self.pub_dice_number_roi.publish(self.bridge.cv2_to_imgmsg(roi, "rgb8"))
                 return len(circles)
             else:
                 return None
+
 
     def calibrate(self, image, x0, y0, annotateImage=True): 
         markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
@@ -177,7 +190,7 @@ class DetectorNode(Node):
         die_roll = self.detect_die_number(frame)
         if die_roll is not None:
             self.die_rolls.append(die_roll)
-            if len(self.die_rolls) == 50 and self.counter == 0:
+            if len(self.die_rolls) == 10 and self.counter == 0:
                 self.counter += 1
                 avg_reading = average_list(self.die_rolls)
                 round_read = math.ceil(avg_reading)
@@ -187,7 +200,7 @@ class DetectorNode(Node):
             else:
                 pass
         else:
-            #self.get_logger().info("NO DIE DETECTED!!!")
+            self.get_logger().info("NO DIE DETECTED!!!")
             self.die_rolls = []
             self.counter = 0
         
