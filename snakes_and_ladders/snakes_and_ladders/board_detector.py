@@ -76,7 +76,7 @@ class DetectorNode(Node):
         # self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
         self.pub_board.publish(self.bridge.cv2_to_imgmsg(edges))
 
-        self.get_logger().info('Angle: %s' % angle)
+        #self.get_logger().info('Angle: %s' % angle)
 
         return(um, vm, wm, hm, angle)   
 
@@ -178,7 +178,7 @@ class DetectorNode(Node):
                     disk_world = self.pixelToWorld(int(ue), int(ve), self.M)
                     if disk_world is not None:
                         disk_world_x, disk_world_y = disk_world
-                        self.get_logger().debug('Piece Location: (%s, %s)' % (disk_world_x, disk_world_y))
+                        #self.get_logger().debug('Piece Location: (%s, %s)' % (disk_world_x, disk_world_y))
                         obj_disk = Object()
                         obj_disk.type = Object.DISK
                         obj_disk.x = float(disk_world_x)

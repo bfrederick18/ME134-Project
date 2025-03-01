@@ -41,6 +41,9 @@ class DemoNode(Node):
         self.actual_pos = []
         self.board_positions = {}
         self.bridge = cv_bridge.CvBridge()
+        self.counter = 0
+        self.num_pub_dice = 1
+        self.num_pub_player = 1
 
         self.pub_segs = self.create_publisher(SegmentArray, name + '/segment_array', 1)
         self.board_location = self.create_subscription(
@@ -119,8 +122,6 @@ class DemoNode(Node):
         if msg.num is not None:
             self.dice_roll = msg.num
 
-
-
     def create_seg(self, p, v=None, t=CYCLE / 2, gripper_val=0.0):
         seg = Segment()
         seg.p = p
@@ -129,9 +130,25 @@ class DemoNode(Node):
         seg.t = t
         return seg
 
+    def recv_check(self, msg):
+        self.waiting_msg = msg.num
+        if self.waiting_msg == 1:
+            self.check_board = True
+            self.counter += 1
+            if self.counter % 2 == 0:
+                self.received_dice_roll = True
+                self.num_pub_player = 0
+            elif self.counter % 2 == 1:
+                self.received_dice_roll = False
+                self.num_pub_dice = 0
+            self.get_logger().info('Counter: %s' % self.counter)
+        else:
+            self.check_board = False
+            #self.received_dice_roll = False
 
     def recv_obj_array(self, msg):
-        if self.received_dice_roll == True:
+        if self.received_dice_roll == True and self.counter % 2 == 0 and self.num_pub_player == 0:
+            self.get_logger().debug('going to player')
             self.obj_arr_msg.objects = []
 
             for obj in msg.objects:
@@ -353,31 +370,26 @@ class DemoNode(Node):
                 #endregion
 
                 self.pub_segs.publish(self.seg_arr_msg)
-                #self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
+                self.num_pub_player += 1
+                self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
 
                 self.seg_arr_msg.segments = []
-                self.received_dice_roll = False
+                #self.received_dice_roll = False
             else:
                 self.get_logger().debug('this sucks')
-    
-    def recv_check(self, msg):
-        self.waiting_msg = msg.num
-        if self.waiting_msg == 1:
-            self.check_board = True
-            self.received_dice_roll = True
-        else:
-            self.check_board = False
-            self.received_dice_roll = False
             
     def recv_dice_box_array(self, msg):
-        if self.received_dice_roll == False:
+        if self.received_dice_roll == False and self.counter % 2 == 1 and self.num_pub_dice == 0:
+            self.get_logger().debug('going to dice')
             self.dice_face_msg.box = []
             for box in msg.box:
                 self.dice_face_msg.box.append(box)
             
             cart_points = [self.x_waiting]
-            cart_points.append([self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.03])  
-            cart_points.append([self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.09])  
+            #cart_points.append([self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.03])  
+            cart_points.append([1.338, 0.301, 0.03])  
+            #cart_points.append([self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.09])  
+            cart_points.append([1.338, 0.301, 0.09])  
 
             Tmove = CYCLE / 2
             dice_rest_pos = cart_points[1]
@@ -429,9 +441,11 @@ class DemoNode(Node):
             self.seg_arr_msg.segments.append(waiting_segment)
 
             self.pub_segs.publish(self.seg_arr_msg)
+            self.num_pub_dice += 1
             self.seg_arr_msg.segments = []
 
-            self.received_dice_roll = True
+            #self.received_dice_roll = True
+            #self.counter = 1
 
 
     def recv_box_array(self, msg):

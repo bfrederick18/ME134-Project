@@ -281,7 +281,7 @@ class DemoNode(Node):
 
         else: 
             qd, qddot = WAITING_POS, [0.0 for _ in WAITING_POS]
-            self.waiting_msg.num = 1
+            #self.waiting_msg.num = 1
         
         self.waiting_pub.publish(self.waiting_msg)
         
