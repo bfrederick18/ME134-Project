@@ -55,6 +55,7 @@ class DemoNode(Node):
         self.num_pub_dice = 1
         self.num_pub_player = 1
         self.reset = False
+        self.position = 0
 
         self.pub_segs = self.create_publisher(SegmentArray, name + '/segment_array', 1)
         self.board_location = self.create_subscription(
@@ -95,7 +96,7 @@ class DemoNode(Node):
             J = np.vstack([Jv, J_dict[J_dict_val]])
             x_stack = np.vstack([np.array(x_delta).reshape(3,1), np.array([0]).reshape(1,1)])
             q_delta = np.linalg.inv(J) @ x_stack
-            q = q + q_delta.flatten() * 0.5
+            q = q + q_delta.flatten() * 0.1
             x_distance.append(np.linalg.norm(x_delta))
             q_step_size.append(np.linalg.norm(q_delta))
 
@@ -177,6 +178,7 @@ class DemoNode(Node):
 
                 q4 = self.newton_raphson(initial_player_pos_raise)
                 q5 = self.newton_raphson(initial_player_pos)
+
                 
                 self.seg_arr_msg.segments.append(create_seg(q4, t=2 * Tmove))  # above player position
                 self.seg_arr_msg.segments.append(create_seg(q5))  # moving to player position
@@ -185,8 +187,8 @@ class DemoNode(Node):
 
                 transitional = [(initial_player_pos[0] + reset_player_pos[0]) / 2, (initial_player_pos[1] 
                                                                                     + reset_player_pos[1]) / 2, 0.09] 
-                qT = self.newton_raphson(transitional)
-                q6 = self.newton_raphson(reset_player_pos)
+                qT = self.newton_raphson(transitional, J_dict_val='vertical')
+                q6 = self.newton_raphson(reset_player_pos, J_dict_val='vertical')
 
                 dx = (transitional[0] - initial_player_pos[0])
                 dy = (transitional[1] - initial_player_pos[1])
@@ -224,6 +226,8 @@ class DemoNode(Node):
 
                 self.seg_arr_msg.segments = []
 
+                self.position = 1
+
                 self.reset = False
             
         elif self.received_dice_roll == True and self.counter % 2 == 0 and self.num_pub_player == 0:
@@ -250,8 +254,12 @@ class DemoNode(Node):
                     cart_points.append([pt.x, pt.y, pt.z + 0.10]) # PIECE POSITION
                     cart_points.append([pt.x, pt.y, pt.z]) # PIECE POSITION
                     if self.dice_roll is not None:
-                        cart_points.append([pt.x + (0.06)*self.dice_roll, pt.y, pt.z])  # MOVE PIECE TO NEXT SQUARE
+                        new_pos = self.position + self.dice_roll
+                        #cart_points.append([pt.x + (0.06)*self.dice_roll, pt.y, pt.z])  # MOVE PIECE TO NEXT SQUARE
+                        cart_points.append([self.board_positions[new_pos][0], self.board_positions[new_pos][1], pt.z])
                         final_player_pos = cart_points[3]
+                        self.position = new_pos
+                        self.get_logger().info('Position: %s' % self.position)
                 self.point_array = [] 
 
                 Tmove = CYCLE / 2
@@ -262,7 +270,7 @@ class DemoNode(Node):
                 q4 = self.newton_raphson(initial_player_pos_raise)
                 q5 = self.newton_raphson(initial_player_pos)
                 
-                self.seg_arr_msg.segments.append(create_seg(q4, t=2 * Tmove))  # above player position
+                self.seg_arr_msg.segments.append(create_seg(q4, t= 3* Tmove))  # above player position
                 self.seg_arr_msg.segments.append(create_seg(q5, t = Tmove))  # moving to player position
                 self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
 
@@ -320,8 +328,10 @@ class DemoNode(Node):
                 self.dice_face_msg.box.append(box)
             
             Tmove = CYCLE / 2
-            dice_rest_pos = [1.338, 0.301, 0.04]
-            lifted_dice_pos = [1.338, 0.301, 0.11]
+            dice_rest_pos = [self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.04]
+            #dice_rest_pos = [1.338, 0.301, 0.04]
+            lifted_dice_pos = [self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.11]
+            #lifted_dice_pos = [1.338, 0.301, 0.11]
 
             q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
             q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
