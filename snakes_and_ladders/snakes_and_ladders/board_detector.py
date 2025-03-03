@@ -36,8 +36,13 @@ class DetectorNode(Node):
         self.x0 = 0.6385  # self.x0 = 0.5805, 0.6285  # + an additional 4.8cm in x
         self.y0 = 0.3755   # self.y0 = 0.3320, 0.379  # and an additional 4.7cm in y
 
+        self.x1 = 1.320  #dice bowl x position
+        self.y1 = 0.326  #dice bowl y position
+        
         self.initial_positions = {}
+        self.initial_dice_marker_positions = {}
         self.M = None
+        self.M2 = None
         self.object_array = ObjectArray()
         self.box_array = BoxArray()
         self.bridge = cv_bridge.CvBridge()
@@ -87,14 +92,33 @@ class DetectorNode(Node):
         if annotateImage:
             cv2.aruco.drawDetectedMarkers(image, markerCorners, markerIds)
 
+        VALID_IDS = {1, 2, 3, 4}
+        if markerIds is not None:
+            filtered_corners = []
+            filtered_ids = []
+
+            for i in range(len(markerIds)):
+                marker_id = markerIds[i][0]
+                if marker_id in VALID_IDS:  # Keep only selected IDs
+                    filtered_corners.append(markerCorners[i])
+                    filtered_ids.append([marker_id])
+
+            # Convert filtered lists back to NumPy arrays
+            if filtered_ids:
+                filtered_ids = np.array(filtered_ids)
+                markerIds = filtered_ids
+                markerCorners = filtered_corners
+            else:
+                filtered_ids = None
+ 
         if (markerIds is None or len(markerIds) != 4 or set(markerIds.flatten()) != set([1,2,3,4])):
-            self.get_logger().debug('Not all markers detected')
+            self.get_logger().debug('Markers Detected: %s' % set(markerIds.flatten()))
             return None
         
         for i, marker_id in enumerate(markerIds.flatten()):
             center = np.mean(markerCorners[i], axis=1).flatten()
             self.initial_positions[marker_id] = center
-
+        
         uvMarkers = np.zeros((4,2), dtype='float32')
         for i in range(4):
             uvMarkers[markerIds[i]-1,:] = np.mean(markerCorners[i], axis=1)
@@ -109,7 +133,52 @@ class DetectorNode(Node):
         ])       
 
         self.M = cv2.getPerspectiveTransform(uvMarkers, xyMarkers)
-    
+
+    # def calibrate_dice_box(self, image, x1, y1, annotateImage=True): 
+    #     markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
+    #         image, cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
+        
+    #     if annotateImage:
+    #         cv2.aruco.drawDetectedMarkers(image, markerCorners, markerIds)
+        
+    #     VALID_IDS = {5, 6}
+    #     if markerIds is not None:
+    #         filtered_corners = []
+    #         filtered_ids = []
+
+    #         for i in range(len(markerIds)):
+    #             marker_id = markerIds[i][0]
+    #             if marker_id in VALID_IDS:  # Keep only selected IDs
+    #                 filtered_corners.append(markerCorners[i])
+    #                 filtered_ids.append([marker_id])
+
+    #         # Convert filtered lists back to NumPy arrays
+    #         if filtered_ids:
+    #             filtered_ids = np.array(filtered_ids)
+    #             markerIds = filtered_ids
+    #             markerCorners = filtered_corners
+    #         else:
+    #             filtered_ids = None
+
+    #     if (markerIds is None or len(markerIds) != 2 or set(markerIds.flatten()) != set([5,6])):
+    #         self.get_logger().debug('Not all dice markers detected')
+    #         return None
+        
+    #     for i, marker_id in enumerate(markerIds.flatten()):
+    #         center = np.mean(markerCorners[i], axis=1).flatten()
+    #         self.initial_dice_marker_positions[marker_id] = center
+            
+
+    #     uvMarkers = np.zeros((2,2), dtype='float32')
+    #     for i in range(2):
+    #         uvMarkers[markerIds[i]-5,:] = np.mean(markerCorners[i], axis=1)
+
+    #     DX = 0.105/2
+    #     DY = 0.1125/2
+    #     xyMarkers = np.float32([
+    #         [x1 - DX, y1 + DY],  # Top left
+    #         [x1 - DX, y1 - DY],  # Bottom left
+    #     ])           
 
     def pixelToWorld(self, u, v, M):
         uvObj = np.float32([u, v])
@@ -134,13 +203,16 @@ class DetectorNode(Node):
 
         old_M = self.M
         self.calibrate(frame, self.x0, self.y0, annotateImage=True)
+        #self.calibrate_dice_box(frame, self.x1, self.y1, annotateImage=True)
+
         if type(self.M) is not np.ndarray:
             self.get_logger().debug('Calibration failed')
             self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
             self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))
             return
         elif old_M is not None and not np.allclose(self.M, old_M):
-            self.get_logger().info('Calibration updated')
+            #self.get_logger().info('Calibration updated')
+            pass
 
         iter = 2
         binary = cv2.erode(binary, None, iterations=iter)
@@ -185,6 +257,17 @@ class DetectorNode(Node):
 
         [um, vm, wm, hm, angle] = self.board_detector(frame)
         board_center_x, board_center_y = self.pixelToWorld(int(um), int(vm), self.M)
+
+        # if len(self.initial_dice_marker_positions) == 2:
+        #     dice_marker_5 = self.initial_dice_marker_positions[5]
+        #     dice_marker_6 = self.initial_dice_marker_positions[6]
+        #     dice_marker_5_x, dice_marker_5_y = self.pixelToWorld(int(dice_marker_5[0]), int(dice_marker_5[1]), self.M)
+        #     dice_marker_6_x, dice_marker_6_y = self.pixelToWorld(int(dice_marker_6[0]), int(dice_marker_6[1]), self.M)
+        #     self.get_logger().debug('Piece Location: (%s, %s)' % (dice_marker_5_x, dice_marker_5_y))
+        # else:
+        #     self.get_logger().debug('Not all dice squares detected')
+
+
         self.box_array.box = [float(board_center_x), float(board_center_y), float(angle)]
             
         ''' 

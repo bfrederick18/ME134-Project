@@ -56,6 +56,11 @@ class DemoNode(Node):
         self.num_pub_player = 1
         self.reset = False
         self.position = 0
+        self.prev_position = 0
+        self.snakes = {}
+        self.ladders = {}
+        self.down_snake = False
+        self.up_ladders = False
 
         self.pub_segs = self.create_publisher(SegmentArray, name + '/segment_array', 1)
         self.board_location = self.create_subscription(
@@ -82,7 +87,7 @@ class DemoNode(Node):
         J_dict = {
             'vertical': np.array([0, 1, -1, 1]).reshape(1,4),
             'dice_bowl': np.array([0, 1.5, 1, 1]).reshape(1,4),
-            'horizontal': np.array([0, 3.0, 1, 1]).reshape(1,4)  # not quite :(  I DONT KNOW HOW TO TUNE PLZ PAYAL HELP
+            'horizontal': np.array([0, 2.5, 1, 1]).reshape(1,4)  # not quite :(  I DONT KNOW HOW TO TUNE PLZ PAYAL HELP
         }
 
         x_distance = []
@@ -251,14 +256,30 @@ class DemoNode(Node):
                 cart_points = [self.x_waiting]
                 
                 for pt in self.point_array:
-                    cart_points.append([pt.x, pt.y, pt.z + 0.10]) # PIECE POSITION
-                    cart_points.append([pt.x, pt.y, pt.z]) # PIECE POSITION
+                    self.prev_position = self.position
+                    #cart_points.append([pt.x, pt.y, pt.z + 0.10]) # PIECE POSITION
+                    cart_points.append([self.board_positions[self.prev_position][0], 
+                                        self.board_positions[self.prev_position][1], pt.z + 0.10])
+                    #cart_points.append([pt.x, pt.y, pt.z]) # PIECE POSITION
+                    cart_points.append([self.board_positions[self.prev_position][0], 
+                                        self.board_positions[self.prev_position][1], pt.z])
+
                     if self.dice_roll is not None:
                         new_pos = self.position + self.dice_roll
-                        #cart_points.append([pt.x + (0.06)*self.dice_roll, pt.y, pt.z])  # MOVE PIECE TO NEXT SQUARE
+                        
+                        if new_pos in self.snakes:
+                            upd_pos = self.snakes[new_pos]
+                            self.down_snake = True
+                        elif new_pos in self.ladders:
+                            upd_pos = self.ladders[new_pos]
+                            self.up_ladders = True
                         cart_points.append([self.board_positions[new_pos][0], self.board_positions[new_pos][1], pt.z])
-                        final_player_pos = cart_points[3]
                         self.position = new_pos
+                        final_player_pos = cart_points[3]
+                        if self.down_snake == True or self.up_ladders == True:
+                            cart_points.append([self.board_positions[upd_pos][0], self.board_positions[upd_pos][1], pt.z])
+                            snake_player_pos = cart_points[4] #or ladder player position
+                            self.position = upd_pos 
                         self.get_logger().info('Position: %s' % self.position)
                 self.point_array = [] 
 
@@ -270,7 +291,7 @@ class DemoNode(Node):
                 q4 = self.newton_raphson(initial_player_pos_raise)
                 q5 = self.newton_raphson(initial_player_pos)
                 
-                self.seg_arr_msg.segments.append(create_seg(q4, t= 3* Tmove))  # above player position
+                self.seg_arr_msg.segments.append(create_seg(q4, t= 2*Tmove))  # above player position
                 self.seg_arr_msg.segments.append(create_seg(q5, t = Tmove))  # moving to player position
                 self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
 
@@ -300,7 +321,40 @@ class DemoNode(Node):
                     release_player_segment.p[4] = 0.0
                     release_player_segment.v = [0.0 for _ in release_player_segment.p]
                     release_player_segment.t = Tmove
-                    self.seg_arr_msg.segments.append(release_player_segment)
+
+                    if self.down_snake == False and self.up_ladders == False:
+                        self.seg_arr_msg.segments.append(release_player_segment)
+
+                    if self.down_snake == True or self.up_ladders == True:
+                        transitional2 = [(final_player_pos[0] + snake_player_pos[0]) / 2, (final_player_pos[1] 
+                                                                                        + snake_player_pos[1]) / 2, 0.09] 
+                        qT2 = self.newton_raphson(transitional2)
+                        q7 = self.newton_raphson(snake_player_pos)
+
+                        dx = (transitional2[0] - final_player_pos[0])
+                        dy = (transitional2[1] - final_player_pos[1])
+                        v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
+
+                        (_, _, Jv, _) = self.chain.fkin(qT2[0:4])
+                        J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
+                        v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
+                        qdotT = np.linalg.pinv(J) @ v_cart_stack
+                        qdotT = qdotT.flatten().tolist()
+                        qdotT.append(0.0)  # gripper
+
+                        self.seg_arr_msg.segments.append(create_seg(qT2, v=qdotT, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
+                        self.seg_arr_msg.segments.append(create_seg(q7, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # placing player position
+
+                        #releasing player position
+                        release_player_segment = Segment()
+                        release_player_segment.p = q7
+                        release_player_segment.p[4] = 0.0
+                        release_player_segment.v = [0.0 for _ in release_player_segment.p]
+                        release_player_segment.t = Tmove
+                        self.seg_arr_msg.segments.append(release_player_segment)
+
+                        self.down_snake = False
+                        self.up_ladders = False
                 
                 #waiting 
                 waiting_segment = Segment()
@@ -328,9 +382,9 @@ class DemoNode(Node):
                 self.dice_face_msg.box.append(box)
             
             Tmove = CYCLE / 2
-            dice_rest_pos = [self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.04]
+            dice_rest_pos = [self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01, 0.04]
             #dice_rest_pos = [1.338, 0.301, 0.04]
-            lifted_dice_pos = [self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.11]
+            lifted_dice_pos = [self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01, 0.11]
             #lifted_dice_pos = [1.338, 0.301, 0.11]
 
             q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
@@ -422,7 +476,7 @@ class DemoNode(Node):
                         cell_number = 40 - col
                     elif row == 4:
                         cell_number = 41 + col
-                    self.board_positions[cell_number] = (x_pos, y_pos)
+                    self.board_positions[cell_number] = (x_pos + 0.022, y_pos - 0.02)
             
             for row in range(5, 10):
                 for col in range(5, 10):
@@ -440,7 +494,7 @@ class DemoNode(Node):
                         cell_number = 81 + col
                     elif row == 9:
                         cell_number = 100 - col
-                    self.board_positions[cell_number] = (x_pos, y_pos)
+                    self.board_positions[cell_number] = (x_pos + 0.022, y_pos)
             
             for row in range(5, 10):
                 for col in range(5):
@@ -466,13 +520,13 @@ class DemoNode(Node):
             #self.get_logger().info('Board Positions: %s' % self.board_positions)
 
             # Define ladders manually (start → end)
-            ladders = {
+            self.ladders = {
                 8: 27, 21: 41, 32: 51, 54: 66, 70: 89,
                 77: 98
             }
 
             # Define snakes manually (start → end)
-            snakes = {
+            self.snakes = {
                 15: 4, 29: 12, 46: 18, 68: 49, 79: 57,
                 95: 74
             }

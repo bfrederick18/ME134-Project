@@ -15,5 +15,5 @@ JOINT_NAMES = ['base', 'shoulder', 'elbow', 'wrist', 'gripper']
 
 HSV_LIMITS_PURPLE = np.array([[170, 190], [90, 140], [40, 120]])
 
-GRIPPER_CLOSE_PURPLE = -0.34
+GRIPPER_CLOSE_PURPLE = -0.4
 GRIPPER_CLOSE_DICE = -0.5

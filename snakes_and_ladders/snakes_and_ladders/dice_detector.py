@@ -35,8 +35,12 @@ class DetectorNode(Node):
         # Assume the center of marker sheet is at the world origin.
         self.x0 = 1.320 #1.338
         self.y0 = 0.326 #0.301
+        
+        self.x1 = 1.320  #dice bowl x position
+        self.y1 = 0.326  #dice bowl y position
 
         self.M = None
+        self.M2 = None
         self.initial_positions = {}
         self.dice_roll_rounded = 0
         self.dice_roll = Num()
@@ -81,7 +85,8 @@ class DetectorNode(Node):
         # Filter contours and draw bounding box
         for contour in contours:
             area = cv2.contourArea(contour)
-            if area > 500 and area < 3000:  # Adjust area threshold as needed
+            #self.get_logger().info("Rotated Rectangle: %s" % area)
+            if area > 500 and area < 2700:  # Adjust area threshold as needed
                 rotatedRectangle = cv2.minAreaRect(contour)
                 #self.get_logger().info("Rotated Rectangle: %s" % rotatedRectangle.__str__())
                 ((x, y), (w, h), angle) = rotatedRectangle
@@ -129,12 +134,26 @@ class DetectorNode(Node):
             if circles is not None:
                 circles = np.round(circles[0, :]).astype("int")
                 #self.get_logger().info("Circle radiuses: %s" % circles)
-
+                
+                pip_centers = [(cx, cy) for (cx, cy, r) in circles]
                 # Draw the circles
                 for (cx, cy, r) in circles:
                     cv2.circle(roi, (cx, cy), r, (0, 255, 0), 2)
-                    # pass
+                
 
+                if len(circles) == 5:
+                    center_x = np.mean([p[0] for p in pip_centers])
+                    center_y = np.mean([p[1] for p in pip_centers])
+                    
+                    distances = [((cx - center_x) ** 2 + (cy - center_y) ** 2) ** 0.5 for cx, cy in pip_centers]
+                    
+                    #If 4 points are at equal distance from the center, it's likely a cross
+                    if np.std(distances) < 10:  # Adjust threshold as needed
+                        return 5
+                    else:
+                        return 6
+
+                                    
                 self.pub_dice_number_roi.publish(self.bridge.cv2_to_imgmsg(roi, "rgb8"))
                 return len(circles)
             else:
@@ -170,6 +189,31 @@ class DetectorNode(Node):
 
         self.M = cv2.getPerspectiveTransform(uvMarkers, xyMarkers)
     
+    def calibrate_dice_box(self, image, x1, y1, annotateImage=True): 
+        markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
+            image, cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
+        if annotateImage:
+            cv2.aruco.drawDetectedMarkers(image, markerCorners, markerIds)
+
+        if (markerIds is None or len(markerIds) != 2 or set(markerIds.flatten()) != set([5,6])):
+            self.get_logger().debug('Not all dice markers detected')
+            return None
+        
+        for i, marker_id in enumerate(markerIds.flatten()):
+            center = np.mean(markerCorners[i], axis=1).flatten()
+            self.initial_positions[marker_id] = center
+            
+
+        uvMarkers = np.zeros((2,2), dtype='float32')
+        for i in range(2):
+            uvMarkers[markerIds[i]-5,:] = np.mean(markerCorners[i], axis=1)
+
+        DX = 0.105/2
+        DY = 0.1125/2
+        xyMarkers = np.float32([
+            [x1 - DX, y1 + DY],  # Top left
+            [x1 - DX, y1 - DY],  # Bottom left
+        ])           
 
     def pixelToWorld(self, u, v, M):
         uvObj = np.float32([u, v])
@@ -183,6 +227,7 @@ class DetectorNode(Node):
         self.box_array.box = []
 
         self.calibrate(frame, self.x0, self.y0, annotateImage=True)
+
         if type(self.M) is not np.ndarray:
             self.get_logger().debug('Calibration failed')
             return
