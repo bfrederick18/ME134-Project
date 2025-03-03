@@ -114,6 +114,23 @@ class DemoNode(Node):
             
         # return WAITING_POS[0:4]
         return WAITING_POS
+
+    def create_transitional(self, initial_segment, final_segment, Tmove):
+        transitional = [(initial_segment[0] + final_segment[0]) / 2, (initial_segment[1] + final_segment[1]) / 2, 0.09] 
+        qT = self.newton_raphson(transitional, J_dict_val='vertical')
+
+        dx = (transitional[0] - initial_segment[0])
+        dy = (transitional[1] - initial_segment[1])
+        v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
+
+        (_, _, Jv, _) = self.chain.fkin(qT[0:4])
+        J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
+        v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
+        qdotT = np.linalg.pinv(J) @ v_cart_stack
+        qdotT = qdotT.flatten().tolist()
+        qdotT.append(0.0)  # gripper
+
+        return qT, qdotT
         
 
     def recv_state(self, msg):
@@ -137,7 +154,7 @@ class DemoNode(Node):
             elif self.counter % 2 == 1:
                 self.received_dice_roll = False
                 self.num_pub_dice = 0
-            self.get_logger().info('Counter: %s' % self.counter)
+            #self.get_logger().info('Counter: %s' % self.counter)
         elif self.waiting_msg == 2:
             self.check_board = True
             self.reset = True
@@ -185,49 +202,21 @@ class DemoNode(Node):
                 q5 = self.newton_raphson(initial_player_pos)
 
                 
-                self.seg_arr_msg.segments.append(create_seg(q4, t=2 * Tmove))  # above player position
+                self.seg_arr_msg.segments.append(create_seg(q4, t=2*Tmove))  # above player position
                 self.seg_arr_msg.segments.append(create_seg(q5))  # moving to player position
                 self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
 
-
-                transitional = [(initial_player_pos[0] + reset_player_pos[0]) / 2, (initial_player_pos[1] 
-                                                                                    + reset_player_pos[1]) / 2, 0.09] 
-                qT = self.newton_raphson(transitional, J_dict_val='vertical')
+                qT, qdotT = self.create_transitional(initial_player_pos, reset_player_pos, Tmove)
                 q6 = self.newton_raphson(reset_player_pos, J_dict_val='vertical')
-
-                dx = (transitional[0] - initial_player_pos[0])
-                dy = (transitional[1] - initial_player_pos[1])
-                v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
-
-                (_, _, Jv, _) = self.chain.fkin(qT[0:4])
-                J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
-                v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
-                qdotT = np.linalg.pinv(J) @ v_cart_stack
-                qdotT = qdotT.flatten().tolist()
-                qdotT.append(0.0)  # gripper
 
                 self.seg_arr_msg.segments.append(create_seg(qT, v=qdotT, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
                 self.seg_arr_msg.segments.append(create_seg(q6, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # placing player position
 
-                #releasing player position
-                release_player_segment = Segment()
-                release_player_segment.p = q6
-                release_player_segment.p[4] = 0.0
-                release_player_segment.v = [0.0 for _ in release_player_segment.p]
-                release_player_segment.t = Tmove
-                self.seg_arr_msg.segments.append(release_player_segment)
-                
-                #waiting 
-                waiting_segment = Segment()
-                waiting_segment.p = WAITING_POS
-                waiting_segment.p[4] = 0.0
-                waiting_segment.v = [0.0 for _ in waiting_segment.p]
-                waiting_segment.t = Tmove * 2
-                self.seg_arr_msg.segments.append(waiting_segment)
+                self.seg_arr_msg.segments.append(create_seg(q6, t=Tmove))
+                self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))
 
                 self.pub_segs.publish(self.seg_arr_msg)
                 self.num_pub_player += 1
-                #self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
 
                 self.seg_arr_msg.segments = []
 
@@ -250,23 +239,18 @@ class DemoNode(Node):
                     disc_world_msg.z = 0.012
                     self.point_array.append(disc_world_msg)
 
-            #self.get_logger().info('Objects: %s' % len(self.point_array))
-
             if len(self.point_array) > 0 and self.x_waiting != []:
                 cart_points = [self.x_waiting]
                 
                 for pt in self.point_array:
                     self.prev_position = self.position
-                    #cart_points.append([pt.x, pt.y, pt.z + 0.10]) # PIECE POSITION
                     cart_points.append([self.board_positions[self.prev_position][0], 
                                         self.board_positions[self.prev_position][1], pt.z + 0.10])
-                    #cart_points.append([pt.x, pt.y, pt.z]) # PIECE POSITION
                     cart_points.append([self.board_positions[self.prev_position][0], 
                                         self.board_positions[self.prev_position][1], pt.z])
 
                     if self.dice_roll is not None:
                         new_pos = self.position + self.dice_roll
-                        
                         if new_pos in self.snakes:
                             upd_pos = self.snakes[new_pos]
                             self.down_snake = True
@@ -280,7 +264,7 @@ class DemoNode(Node):
                             cart_points.append([self.board_positions[upd_pos][0], self.board_positions[upd_pos][1], pt.z])
                             snake_player_pos = cart_points[4] #or ladder player position
                             self.position = upd_pos 
-                        self.get_logger().info('Position: %s' % self.position)
+                        #self.get_logger().info('Position: %s' % self.position)
                 self.point_array = [] 
 
                 Tmove = CYCLE / 2
@@ -291,85 +275,42 @@ class DemoNode(Node):
                 q4 = self.newton_raphson(initial_player_pos_raise)
                 q5 = self.newton_raphson(initial_player_pos)
                 
-                self.seg_arr_msg.segments.append(create_seg(q4, t= 2*Tmove))  # above player position
-                self.seg_arr_msg.segments.append(create_seg(q5, t = Tmove))  # moving to player position
+                self.seg_arr_msg.segments.append(create_seg(q4, t=2*Tmove))  # above player position
+                self.seg_arr_msg.segments.append(create_seg(q5, t=Tmove))  # moving to player position
                 self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
 
                 if self.dice_roll is not None:
-                    transitional = [(initial_player_pos[0] + final_player_pos[0]) / 2, (initial_player_pos[1] 
-                                                                                        + final_player_pos[1]) / 2, 0.09] 
-                    qT = self.newton_raphson(transitional)
+
+                    qT, qdotT = self.create_transitional(initial_player_pos, final_player_pos, Tmove)
+
                     q6 = self.newton_raphson(final_player_pos)
-
-                    dx = (transitional[0] - initial_player_pos[0])
-                    dy = (transitional[1] - initial_player_pos[1])
-                    v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
-
-                    (_, _, Jv, _) = self.chain.fkin(qT[0:4])
-                    J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
-                    v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
-                    qdotT = np.linalg.pinv(J) @ v_cart_stack
-                    qdotT = qdotT.flatten().tolist()
-                    qdotT.append(0.0)  # gripper
-
+                    
                     self.seg_arr_msg.segments.append(create_seg(qT, v=qdotT, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
                     self.seg_arr_msg.segments.append(create_seg(q6, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # placing player position
 
-                    #releasing player position
-                    release_player_segment = Segment()
-                    release_player_segment.p = q6
-                    release_player_segment.p[4] = 0.0
-                    release_player_segment.v = [0.0 for _ in release_player_segment.p]
-                    release_player_segment.t = Tmove
-
                     if self.down_snake == False and self.up_ladders == False:
-                        self.seg_arr_msg.segments.append(release_player_segment)
+
+                        self.seg_arr_msg.segments.append(create_seg(q6, t=Tmove))
 
                     if self.down_snake == True or self.up_ladders == True:
-                        transitional2 = [(final_player_pos[0] + snake_player_pos[0]) / 2, (final_player_pos[1] 
-                                                                                        + snake_player_pos[1]) / 2, 0.09] 
-                        qT2 = self.newton_raphson(transitional2)
+
+                        qT2, qdotT2 = self.create_transitional(final_player_pos, snake_player_pos, Tmove)
                         q7 = self.newton_raphson(snake_player_pos)
 
-                        dx = (transitional2[0] - final_player_pos[0])
-                        dy = (transitional2[1] - final_player_pos[1])
-                        v_cart = np.array([dx / Tmove, dy / Tmove, 0.0])
-
-                        (_, _, Jv, _) = self.chain.fkin(qT2[0:4])
-                        J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
-                        v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
-                        qdotT = np.linalg.pinv(J) @ v_cart_stack
-                        qdotT = qdotT.flatten().tolist()
-                        qdotT.append(0.0)  # gripper
-
-                        self.seg_arr_msg.segments.append(create_seg(qT2, v=qdotT, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
+                        self.seg_arr_msg.segments.append(create_seg(qT2, v=qdotT2, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
                         self.seg_arr_msg.segments.append(create_seg(q7, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # placing player position
 
-                        #releasing player position
-                        release_player_segment = Segment()
-                        release_player_segment.p = q7
-                        release_player_segment.p[4] = 0.0
-                        release_player_segment.v = [0.0 for _ in release_player_segment.p]
-                        release_player_segment.t = Tmove
-                        self.seg_arr_msg.segments.append(release_player_segment)
+                        self.seg_arr_msg.segments.append(create_seg(q7, t=Tmove))
 
                         self.down_snake = False
                         self.up_ladders = False
-                
-                #waiting 
-                waiting_segment = Segment()
-                waiting_segment.p = WAITING_POS
-                waiting_segment.p[4] = 0.0
-                waiting_segment.v = [0.0 for _ in waiting_segment.p]
-                waiting_segment.t = Tmove * 2
-                self.seg_arr_msg.segments.append(waiting_segment)
+
+                self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))
 
                 self.pub_segs.publish(self.seg_arr_msg)
                 self.num_pub_player += 1
-                #self.get_logger().info('All segs: %s' % self.seg_arr_msg.segments)
 
                 self.seg_arr_msg.segments = []
-                #self.received_dice_roll = False
             else:
                 self.get_logger().debug('this sucks')
             
@@ -391,18 +332,15 @@ class DemoNode(Node):
             q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
             #q_dice_drop[3] = -np.pi/2
             
-            self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2 * Tmove))  # going to dice
+            self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2*Tmove))  # going to dice
             self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # gripping the dice
             self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # lifting dice up
             self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove))  # dropping the dice
-            self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2 * Tmove))  # waiting 
+            self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))  # waiting 
 
             self.pub_segs.publish(self.seg_arr_msg)
             self.num_pub_dice += 1
             self.seg_arr_msg.segments = []
-
-            #self.received_dice_roll = True
-            #self.counter = 1
 
 
     def recv_box_array(self, msg):
@@ -422,24 +360,6 @@ class DemoNode(Node):
             angle = self.box_arr_msg.box[2]
 
             #self.get_logger().info('Board Positions: %s, %s, %s' % (x_mid, y_mid, angle))
-
-            #self.board_positions = {}
-            # for row in range(10):
-            #     for col in range(10):
-            #         if col < 5:
-            #             x_pos = x_mid - (((4 - col) * cell_width - cell_width / 2))*cos(np.radians(angle))
-            #         else:
-            #             x_pos = x_mid + ((col - 5) * cell_width + cell_width / 2)*cos(np.radians(angle))
-
-            #         if row < 5:
-            #             y_pos = y_mid - ((4 - row) * cell_height - cell_height / 2)*sin(np.radians(angle))
-            #         else:
-            #             y_pos = y_mid + ((row - 5) * cell_height + cell_height / 2)*sin(np.radians(angle))
-
-            #         if row % 2 == 0:
-            #             cell_number = 20 * (row // 2) + 1 + col
-            #         else:
-            #             cell_number = 20 * (((row - 1) // 2) + 1) - col
             
             self.board_positions = {}
             for row in range(5):
@@ -498,8 +418,6 @@ class DemoNode(Node):
             
             for row in range(5, 10):
                 for col in range(5):
-                    #x_pos = x_mid - (((4 - col)*cell_width - cell_width/2)*np.cos(np.radians(angle)) + ((row - 5) * (cell_height + cell_height/2)*np.sin(np.radians(angle))))
-                    #y_pos = y_mid + (((row - 5) * (cell_height + cell_height/2)*np.cos(np.radians(angle))) - ((4 - col)*cell_width - cell_width/2)*np.sin(np.radians(angle)))
                     x_pos_og = x_mid - ((4 - col)*cell_width + cell_width/2)
                     y_pos_og = y_mid + ((row - 5) *cell_height + cell_height/2)
                     x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
@@ -517,7 +435,7 @@ class DemoNode(Node):
 
                     self.board_positions[cell_number] = (x_pos, y_pos)
 
-            #self.get_logger().info('Board Positions: %s' % self.board_positions)
+            self.get_logger().info('Board Positions: %s' % self.board_positions)
 
             # Define ladders manually (start → end)
             self.ladders = {

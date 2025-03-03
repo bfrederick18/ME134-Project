@@ -80,9 +80,15 @@ class DetectorNode(Node):
 
         # self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
         self.pub_board.publish(self.bridge.cv2_to_imgmsg(edges))
-
+                
+        #to deal with CW verus CCW Rotation
+        if angle < 45.0 and angle >= 0.0:
+            angle = angle
+        elif angle <= 90.0 and angle >= 45.0:
+            angle = angle - 90
+        
         self.get_logger().info('Angle: %s' % angle)
-
+            
         return(um, vm, wm, hm, angle)   
 
     
@@ -257,16 +263,6 @@ class DetectorNode(Node):
 
         [um, vm, wm, hm, angle] = self.board_detector(frame)
         board_center_x, board_center_y = self.pixelToWorld(int(um), int(vm), self.M)
-
-        # if len(self.initial_dice_marker_positions) == 2:
-        #     dice_marker_5 = self.initial_dice_marker_positions[5]
-        #     dice_marker_6 = self.initial_dice_marker_positions[6]
-        #     dice_marker_5_x, dice_marker_5_y = self.pixelToWorld(int(dice_marker_5[0]), int(dice_marker_5[1]), self.M)
-        #     dice_marker_6_x, dice_marker_6_y = self.pixelToWorld(int(dice_marker_6[0]), int(dice_marker_6[1]), self.M)
-        #     self.get_logger().debug('Piece Location: (%s, %s)' % (dice_marker_5_x, dice_marker_5_y))
-        # else:
-        #     self.get_logger().debug('Not all dice squares detected')
-
 
         self.box_array.box = [float(board_center_x), float(board_center_y), float(angle)]
             
