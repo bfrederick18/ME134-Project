@@ -140,60 +140,9 @@ class DetectorNode(Node):
 
         self.M = cv2.getPerspectiveTransform(uvMarkers, xyMarkers)
 
-    # def calibrate_dice_box(self, image, x1, y1, annotateImage=True): 
-    #     markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
-    #         image, cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50))
-        
-    #     if annotateImage:
-    #         cv2.aruco.drawDetectedMarkers(image, markerCorners, markerIds)
-        
-    #     VALID_IDS = {5, 6}
-    #     if markerIds is not None:
-    #         filtered_corners = []
-    #         filtered_ids = []
-
-    #         for i in range(len(markerIds)):
-    #             marker_id = markerIds[i][0]
-    #             if marker_id in VALID_IDS:  # Keep only selected IDs
-    #                 filtered_corners.append(markerCorners[i])
-    #                 filtered_ids.append([marker_id])
-
-    #         # Convert filtered lists back to NumPy arrays
-    #         if filtered_ids:
-    #             filtered_ids = np.array(filtered_ids)
-    #             markerIds = filtered_ids
-    #             markerCorners = filtered_corners
-    #         else:
-    #             filtered_ids = None
-
-    #     if (markerIds is None or len(markerIds) != 2 or set(markerIds.flatten()) != set([5,6])):
-    #         self.get_logger().debug('Not all dice markers detected')
-    #         return None
-        
-    #     for i, marker_id in enumerate(markerIds.flatten()):
-    #         center = np.mean(markerCorners[i], axis=1).flatten()
-    #         self.initial_dice_marker_positions[marker_id] = center
-            
-
-    #     uvMarkers = np.zeros((2,2), dtype='float32')
-    #     for i in range(2):
-    #         uvMarkers[markerIds[i]-5,:] = np.mean(markerCorners[i], axis=1)
-
-    #     DX = 0.105/2
-    #     DY = 0.1125/2
-    #     xyMarkers = np.float32([
-    #         [x1 - DX, y1 + DY],  # Top left
-    #         [x1 - DX, y1 - DY],  # Bottom left
-    #     ])           
-
     def pixelToWorld(self, u, v, M):
         uvObj = np.float32([u, v])
         xyObj = cv2.perspectiveTransform(uvObj.reshape(1, 1, 2), M).reshape(2)
-
-        # if annotateImage:
-        #     s = "(%7.4f, %7.4f)" % (xyObj[0], xyObj[1])
-        #     cv2.putText(image, s, (u-80, v-8), cv2.FONT_HERSHEY_SIMPLEX,
-        #                 0.5, (255, 0, 0), 2, cv2.LINE_AA)
         return xyObj
     
 
@@ -259,7 +208,6 @@ class DetectorNode(Node):
                         obj_disk.theta = 0.0
                         
                         self.object_array.objects.append(obj_disk)
-        
 
         [um, vm, wm, hm, angle] = self.board_detector(frame)
         board_center_x, board_center_y = self.pixelToWorld(int(um), int(vm), self.M)
