@@ -36,7 +36,7 @@ def generate_launch_description():
                       {'white_balance': 3500},
                       {'auto_exposure': False},
                       {'exposure': 100},
-                      {'autofocus': False}])
+                      {'autofocus': True}])
 
     # Configure the ball detector node
     node_detector = Node(

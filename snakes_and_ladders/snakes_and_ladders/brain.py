@@ -61,6 +61,7 @@ class DemoNode(Node):
         self.ladders = {}
         self.down_snake = False
         self.up_ladders = False
+        self.reset_pt = False
 
         self.pub_segs = self.create_publisher(SegmentArray, name + '/segment_array', 1)
         self.board_location = self.create_subscription(
@@ -244,10 +245,30 @@ class DemoNode(Node):
                 
                 for pt in self.point_array:
                     self.prev_position = self.position
-                    cart_points.append([self.board_positions[self.prev_position][0], 
-                                        self.board_positions[self.prev_position][1], pt.z + 0.10])
-                    cart_points.append([self.board_positions[self.prev_position][0], 
-                                        self.board_positions[self.prev_position][1], pt.z])
+                    if abs(self.board_positions[self.prev_position][0] - pt.x) >= 0.04 or abs(self.board_positions[self.prev_position][1] - pt.y) >= 0.04:
+                        self.reset_pt = True
+                        cart_points.append([pt.x, pt.y, pt.z + 0.10])
+                        cart_points.append([pt.x, pt.y, pt.z])
+                        cart_points.append([self.board_positions[self.prev_position][0], 
+                                            self.board_positions[self.prev_position][1], pt.z])
+                        reset_point_raise = cart_points[1]
+                        reset_point = cart_points[2]
+                        initial_player_pos = cart_points[3]
+                        q4 = self.newton_raphson(reset_point_raise)
+                        q5 = self.newton_raphson(reset_point)
+                        q_real = self.newton_raphson(initial_player_pos)
+                    else:
+                        self.reset_pt = False
+                        cart_points.append([self.board_positions[self.prev_position][0], 
+                                            self.board_positions[self.prev_position][1], pt.z + 0.10])
+                        cart_points.append([self.board_positions[self.prev_position][0], 
+                                            self.board_positions[self.prev_position][1], pt.z])
+                        initial_player_pos_raise = cart_points[1]
+                        initial_player_pos = cart_points[2]
+                        q4 = self.newton_raphson(initial_player_pos_raise)
+                        q5 = self.newton_raphson(initial_player_pos)
+                    
+                    self.get_logger().info('Need to reset? %s' % self.reset_pt)
 
                     if self.dice_roll is not None:
                         new_pos = self.position + self.dice_roll
@@ -259,25 +280,30 @@ class DemoNode(Node):
                             self.up_ladders = True
                         cart_points.append([self.board_positions[new_pos][0], self.board_positions[new_pos][1], pt.z])
                         self.position = new_pos
-                        final_player_pos = cart_points[3]
+                        if self.reset_pt == True:
+                            final_player_pos = cart_points[4]
+                        else:
+                            final_player_pos = cart_points[3]
                         if self.down_snake == True or self.up_ladders == True:
                             cart_points.append([self.board_positions[upd_pos][0], self.board_positions[upd_pos][1], pt.z])
-                            snake_player_pos = cart_points[4] #or ladder player position
+                            if self.reset_pt == True:
+                                snake_player_pos = cart_points[5] #or ladder player position
+                            else:
+                                snake_player_pos = cart_points[4] #or ladder player position
                             self.position = upd_pos 
-                        #self.get_logger().info('Position: %s' % self.position)
+                        self.get_logger().info('Position: %s' % self.position)
                 self.point_array = [] 
-
                 Tmove = CYCLE / 2
-                
-                initial_player_pos_raise = cart_points[1]
-                initial_player_pos = cart_points[2]
 
-                q4 = self.newton_raphson(initial_player_pos_raise)
-                q5 = self.newton_raphson(initial_player_pos)
-                
                 self.seg_arr_msg.segments.append(create_seg(q4, t=2*Tmove))  # above player position
                 self.seg_arr_msg.segments.append(create_seg(q5, t=Tmove))  # moving to player position
                 self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
+
+                if self.reset_pt == True:
+                    qTreal, qdotTreal = self.create_transitional(reset_point, initial_player_pos, Tmove)
+                    self.seg_arr_msg.segments.append(create_seg(qTreal, v=qdotTreal, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))
+                    self.seg_arr_msg.segments.append(create_seg(q_real, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))
+                    self.reset_pt = False
 
                 if self.dice_roll is not None:
 
@@ -299,7 +325,6 @@ class DemoNode(Node):
 
                         self.seg_arr_msg.segments.append(create_seg(qT2, v=qdotT2, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
                         self.seg_arr_msg.segments.append(create_seg(q7, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # placing player position
-
                         self.seg_arr_msg.segments.append(create_seg(q7, t=Tmove))
 
                         self.down_snake = False
@@ -435,7 +460,7 @@ class DemoNode(Node):
 
                     self.board_positions[cell_number] = (x_pos, y_pos)
 
-            self.get_logger().info('Board Positions: %s' % self.board_positions)
+            # self.get_logger().info('Board Positions: %s' % self.board_positions)
 
             # Define ladders manually (start → end)
             self.ladders = {
