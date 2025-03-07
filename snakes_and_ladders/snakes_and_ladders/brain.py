@@ -13,7 +13,7 @@ from geometry_msgs.msg import Point
 from project_msgs.msg import Object, ObjectArray, PointArray, Segment, SegmentArray, BoxArray, State, Num
 
 from hw6sols.KinematicChainSol import KinematicChain
-from snakes_and_ladders.constants import CYCLE, JOINT_NAMES, LOGGER_LEVEL, WAITING_POS, GRIPPER_CLOSE_DICE, GRIPPER_CLOSE_PURPLE
+from snakes_and_ladders.constants import CYCLE, JOINT_NAMES, LOGGER_LEVEL, WAITING_POS, GRIPPER_CLOSE_DICE, GRIPPER_CLOSE_PURPLE, GRIPPER_INTERMEDIATE
 
 
 def create_seg(p, v=None, t=CYCLE / 2, gripper_val=0.0):
@@ -348,16 +348,16 @@ class DemoNode(Node):
                 self.dice_face_msg.box.append(box)
             
             Tmove = CYCLE / 2
-            dice_rest_pos = [self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01, 0.04]
+            dice_rest_pos = [self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.04] # self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01
             #dice_rest_pos = [1.338, 0.301, 0.04]
-            lifted_dice_pos = [self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01, 0.11]
+            lifted_dice_pos = [self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.11]
             #lifted_dice_pos = [1.338, 0.301, 0.11]
 
             q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
             q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
             #q_dice_drop[3] = -np.pi/2
             
-            self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2*Tmove))  # going to dice
+            self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2*Tmove, gripper_val=GRIPPER_INTERMEDIATE))  # going to dice
             self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # gripping the dice
             self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # lifting dice up
             self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove))  # dropping the dice
@@ -421,7 +421,7 @@ class DemoNode(Node):
                         cell_number = 40 - col
                     elif row == 4:
                         cell_number = 41 + col
-                    self.board_positions[cell_number] = (x_pos + 0.022, y_pos - 0.02)
+                    self.board_positions[cell_number] = (x_pos, y_pos) #(x_pos + 0.022, y_pos - 0.02
             
             for row in range(5, 10):
                 for col in range(5, 10):
@@ -439,7 +439,7 @@ class DemoNode(Node):
                         cell_number = 81 + col
                     elif row == 9:
                         cell_number = 100 - col
-                    self.board_positions[cell_number] = (x_pos + 0.022, y_pos)
+                    self.board_positions[cell_number] = (x_pos, y_pos) #x_pos + 0.022, y_pos
             
             for row in range(5, 10):
                 for col in range(5):
@@ -478,6 +478,7 @@ class DemoNode(Node):
                 self.check_board = False
         else:
             self.board_positions = self.board_positions
+
 
 def main(args=None):
     rclpy.init(args=args)

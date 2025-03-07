@@ -179,7 +179,7 @@ class DetectorNode(Node):
     def detect_dice_dish(self, frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        edges = cv2.Canny(gray, 20, 150)
+        edges = cv2.Canny(gray, 40, 150)
         self.pub_dice_dish_edge.publish(self.bridge.cv2_to_imgmsg(edges, "mono8"))
         
         # Find contours and select the largest one (assumed to be the dish)

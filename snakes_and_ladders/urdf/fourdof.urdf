@@ -32,7 +32,7 @@
   <joint name="placement" type="fixed">
     <parent link="table"/>
     <child  link="baseplate"/>
-    <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>			<!-- BFRED 0.75 0 0 -->
+    <origin xyz="0.752 0.0 0.0" rpy="0 0 0"/>			<!-- BFRED 0.75 0 0 -->
   </joint>
 
   <!-- BASE PLATE: Shift across the base plate to the base motor. --> 
@@ -124,13 +124,13 @@
   <joint name="upperarm" type="fixed">
     <parent link="upperarm"/>
     <child  link="elbowmotor"/>
-    <origin xyz="0.3850 -0.0025 0.0251" rpy="0 0 0"/>		  <!-- "0.3850 -0.0025 0.0057"-->
+    <origin xyz="0.3850 0 0" rpy="0 0 0"/>		  <!-- 0.3850 -0.0025 0.0251 "0.3850 -0.0025 0.0057"-->
   </joint>
 
   <!-- Elbow motor.  Thickness: X5 = 31.1mm, X8 = 45.1mm -->
   <link name="elbowmotor">
     <visual>
-      <origin xyz="-0.002 0.002 -0.0161" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
         <mesh filename="package://snakes_and_ladders/meshes/X5.stl"
 	      scale="0.001 0.001 0.001"/>
@@ -142,15 +142,15 @@
   <joint name="elbow" type="continuous">
     <parent link="elbowmotor"/>
     <child  link="lowerarm"/>
-    <origin xyz="0 0 0.01655" rpy="0 0 0"/>
+    <origin xyz="0 0 0.0311" rpy="0 0 0"/>
     <axis   xyz="0 0 1"/>
   </joint>
 
   <!-- Shift across the upper arm (1/4in thickness) -->
   <link name="lowerarm">
     <visual>
-      <origin xyz="-0.036768 0.039268 -0.00175" rpy="1.5708 0 0"/>
-      <geometry>
+      <origin xyz="-0.034767 0.037869 0" rpy="1.5708 0 0"/>    <!-- -0.036768 0.039268 -0.00175 -->
+      <geometry> 
         <mesh filename="package://snakes_and_ladders/meshes/lowerarm_improved.STL"
             scale="0.001 0.001 0.001"/>
       </geometry>
@@ -161,13 +161,13 @@
   <joint name="wrist_rot" type="fixed">
     <parent link="lowerarm"/>
     <child  link="wristmotor"/>
-    <origin xyz="0.350 0  -0.01655" rpy="0 0 -3.14"/>		  <!-- LOWER ARM DIMENIONS 0.00285 -->
+    <origin xyz="0.325 0 0" rpy="0 0 -3.14159"/>		  <!-- 0.350 0  -0.01655 LOWER ARM DIMENIONS 0.00285 -->
   </joint>
 
   <!-- Wrist motor.  Thickness: X5 = 31.1mm, X8 = 45.1mm -->
   <link name="wristmotor">
     <visual>
-      <origin xyz="0.002 -0.002 0.01455" rpy="-3.14 0 0"/>
+      <origin xyz="0 0 0" rpy="0 3.14159 0"/>   <!-- 0.002 -0.002 0.01455 -->
       <geometry>
         <mesh filename="package://snakes_and_ladders/meshes/X5.stl"
 	      scale="0.001 0.001 0.001"/>
@@ -179,16 +179,16 @@
   <joint name="wrist" type="continuous">
     <parent link="wristmotor"/>
     <child  link="lowerbracket"/>
-    <origin xyz="0 0 -0.0321" rpy="3.14 1.5708 0"/>
+    <origin xyz="0 0 -0.0311" rpy="3.14159 1.5708 0"/>    <!-- 0 0 -0.0321 -->
     <axis   xyz="1 0 0"/>
   </joint>
 
   <!-- Lower L Bracket -->
   <link name="lowerbracket">
     <visual>
-      <origin xyz="-0.015 -0.0475 -0.025" rpy="0 0 0"/>  <!-- Lower L Bracket -0.0475 -->
+      <origin xyz="0 -0.0475 -0.045" rpy="0 0 0"/>  <!-- -0.015 -0.0475 -0.025 Lower L Bracket -0.0475 -->
       <geometry>
-        <mesh filename="package://snakes_and_ladders/meshes/l_bracket_gripper.STL"
+        <mesh filename="package://snakes_and_ladders/meshes/l_bracket_gripper_0015.STL"
             scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="wood"/>
@@ -198,13 +198,13 @@
   <joint name="gripper" type="fixed">
     <parent link="lowerbracket"/>
     <child  link="gripper"/>
-    <origin xyz="-0.0075 -0.0175 -0.055" rpy="-1.5708 -1.5708 -1.5708"/>		 
+    <origin xyz="0.0615 -0.0475 0" rpy="-1.5708 -1.5708 -1.5708"/>		<!-- -0.0075 -0.0175 -0.055 --> 
   </joint>
 
 
   <link name="gripper">
     <visual>
-      <origin xyz="0.033 0.01 0.077" rpy="0 1.5708 0"/>  <!-- Lower L Bracket 0.033 -->
+      <origin xyz="-0.0225 -0.03 0.05468" rpy="0 1.5708 0"/>  <!-- -0.0225 -0.03 0.0565  ; 0.033 0.01 0.077 Lower L Bracket 0.033 -->
       <geometry>
         <mesh filename="package://snakes_and_ladders/meshes/Gripper_Part.STL"
             scale="0.001 0.001 0.001"/>
@@ -216,7 +216,7 @@
   <joint name="revolve" type="fixed">
     <parent link="gripper"/>
     <child  link="tip"/>
-    <origin xyz="0.070 0.132 0.03" rpy="0 0 0"/>		 <!-- Lower L Bracket 0.025-0.010, 0.05-0.035 -->
+    <origin xyz="0 0.127 0" rpy="0 0 0"/>		 <!-- 0.070 0.132 0.03 Lower L Bracket 0.025-0.010, 0.05-0.035 -->
   </joint>
   
   <!-- TIP FRAME -->
