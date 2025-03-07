@@ -32,15 +32,15 @@
   <joint name="placement" type="fixed">
     <parent link="table"/>
     <child  link="baseplate"/>
-    <origin xyz="0.748 0.01 0.0" rpy="0 0 0"/>			<!-- WHERE IS THE BASE .748 -->
+    <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>			<!-- BFRED 0.75 0 0 -->
   </joint>
 
   <!-- BASE PLATE: Shift across the base plate to the base motor. --> 
   <link name="baseplate">
     <visual>
-      <origin xyz="0.0 0.025 0.0125" rpy="0 0 0"/>
+      <origin xyz="0.0 0.05875 0.00625" rpy="0 0 0"/>
       <geometry>
-	<box size="0.2 0.1 0.0230"/>
+	<box size="0.1575 0.1175 0.0125"/>
       </geometry>
       <material name="wood"/>
     </visual>
@@ -49,7 +49,7 @@
   <joint name="baseplate" type="fixed">
     <parent link="baseplate"/>
     <child  link="basemotor"/>
-    <origin xyz="0 0 0.0230" rpy="0 0 0"/>
+    <origin xyz="0 0.04 0.0125" rpy="0 0 0"/>        <!-- BFRED 0 0.04 0.0125 -->
   </joint>
 
   <!-- BASE MOTOR: Thickness: X5 = 31.1mm, X8 = 45.1mm -->
@@ -67,16 +67,16 @@
   <joint name="base" type="continuous">
     <parent link="basemotor"/>
     <child  link="lbracket"/>
-    <origin xyz="0 0 0.0451" rpy="0 0 -1.5708"/>  <!--0.035, 0.03321-->
+    <origin xyz="0 0 0.0451" rpy="0 0 -1.5708"/>        <!-- BFRED 0 0 0.0451 -->
     <axis   xyz="0 0 1"/>
   </joint>
 
   <!-- L BRACKET: Shift and rotate across the L bracket. -->
   <link name="lbracket">
     <visual>
-      <origin xyz = ".085 .0550 0" rpy="1.5708 0 -1.5708"/>
+      <origin xyz = "0.0875 0.085 0" rpy="1.5708 0 -1.5708"/>    <!-- BFRED 0.0875 0.085 0 0 -->
       <geometry>
-        <mesh filename="package://snakes_and_ladders/meshes/lower_bracket_improved_1005.STL"
+        <mesh filename="package://snakes_and_ladders/meshes/lower_bracket_improved_0022.STL"
         scale = "0.001 0.001 0.001"/>
       </geometry>
       <material name = "wood"/>
@@ -86,13 +86,13 @@
   <joint name="lbracket" type="fixed">
     <parent link="lbracket"/>
     <child  link="shouldermotor"/>
-    <origin xyz="-0.038 0.02 0.113" rpy="0 -1.5708 1.5708"/>	  <!-- L BRACKET DIMENIONS -1.5708 0.0445 -0.017 0.1025 -->
+    <origin xyz="-0.0385 0.037 0.1125" rpy="0 -1.5708 1.5708"/>
   </joint>
 
   <!-- SHOULDER MOTOR: Thickness: X5 = 31.1mm, X8 = 45.1mm -0.0065 -->
   <link name="shouldermotor">
     <visual>
-      <origin xyz="0 0 -0.02250" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
         <mesh filename="package://snakes_and_ladders/meshes/X8.stl"
 	      scale="0.001 0.001 0.001"/>
@@ -104,14 +104,14 @@
   <joint name="shoulder" type="continuous">
     <parent link="shouldermotor"/>
     <child  link="upperarm"/>
-    <origin xyz="0 0 0.03225" rpy="-3.14159 0 0.02"/>
+    <origin xyz="0 0 0.0451" rpy="-3.14159 0 0"/>
     <axis   xyz="0 0 -1"/>
   </joint>
 
   <!-- UPPER ARM: Shift across the upper arm (1/4in thickness) -->
   <link name="upperarm">
     <visual>
-      <origin xyz="-0.034767 0.037869 0.00285" rpy="1.5708 0 0"/>  <!-- 0.25 0 0.00285 -->
+      <origin xyz="-0.034767 0.037869 -0.00635" rpy="1.5708 0 0"/>  <!-- LEFT OFF FROM HERE; NEED TO IMPORT NEW ARM CAD -->
       <geometry>
 	      <mesh filename="package://snakes_and_ladders/meshes/Upperarm_improved.STL"
             scale="0.001 0.001 0.001"/>
