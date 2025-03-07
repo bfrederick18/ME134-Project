@@ -8,10 +8,11 @@ import time
 
 from rclpy.node         import Node
 from sensor_msgs.msg    import Image
+from geometry_msgs.msg  import Point
 
 from project_msgs.msg import Object, ObjectArray, BoxArray
 
-from snakes_and_ladders.constants import HSV_LIMITS_PURPLE, LOGGER_LEVEL
+from snakes_and_ladders.constants import HSV_LIMITS_PURPLE, HSV_LIMITS_DISH, LOGGER_LEVEL
  
 
 def average_list(list):
@@ -50,8 +51,13 @@ class DetectorNode(Node):
         self.pub_rgb = self.create_publisher(Image, name +'/image_raw', 3)
         self.pub_binary = self.create_publisher(Image, name +'/binary', 3)
         self.pub_board = self.create_publisher(Image, name +'/board', 3)
+        self.pub_dish_hsv = self.create_publisher(Image, name +'/dish_hsv', 3)
+        self.pub_dish_binary = self.create_publisher(Image, name +'/dish_binary', 3)
+        self.pub_dish_detector = self.create_publisher(Image, name +'/dish_detector', 3)
         self.pub_obj_array = self.create_publisher(ObjectArray, name + '/object_array', 1)
         self.pub_box_array = self.create_publisher(BoxArray, name + '/box_array', 1)
+
+        self.pub_dish_location = self.create_publisher(Point, name + '/dish_location', 1)
 
         self.sub = self.create_subscription(
             Image, '/image_raw', self.process, 1)
@@ -90,6 +96,33 @@ class DetectorNode(Node):
         self.get_logger().info('Angle: %s' % angle)
             
         return(um, vm, wm, hm, angle)   
+    
+
+    def dish_detector(self, frame):
+        dish_dectector_frame = frame.copy()
+        hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+        binary = cv2.inRange(hsv, HSV_LIMITS_DISH[:, 0], HSV_LIMITS_DISH[:, 1])
+        self.pub_dish_hsv.publish(self.bridge.cv2_to_imgmsg(hsv, 'rgb8'))
+        # self.pub_dish_binary.publish(self.bridge.cv2_to_imgmsg(binary))
+
+        iter = 2
+        binary = cv2.erode(binary, None, iterations=iter)
+        binary = cv2.dilate(binary, None, iterations=2*iter)
+        binary = cv2.erode(binary, None, iterations=iter)
+
+        self.pub_dish_binary.publish(self.bridge.cv2_to_imgmsg(binary))
+
+        (contours, hierarchy) = cv2.findContours(
+            binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        cv2.drawContours(dish_dectector_frame, contours, -1, self.blue, 1)
+
+        if len(contours) > 0:
+            c = max(contours, key=cv2.contourArea)
+            x, y, w, h = cv2.boundingRect(c)
+            cv2.rectangle(dish_dectector_frame, (x, y), (x + w, y + h), self.red, 2)
+            self.pub_dish_detector.publish(self.bridge.cv2_to_imgmsg(dish_dectector_frame, 'rgb8'))
+            return x, y, w, h
 
     
     def calibrate(self, image, x0, y0, annotateImage=True): 
@@ -153,6 +186,8 @@ class DetectorNode(Node):
         assert(msg.encoding == 'rgb8')
         frame = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
 
+        dish_x, dish_y, dish_w, dish_h = self.dish_detector(frame)
+
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         binary = cv2.inRange(hsv, HSV_LIMITS_PURPLE[:, 0], HSV_LIMITS_PURPLE[:, 1])
 
@@ -213,18 +248,16 @@ class DetectorNode(Node):
         board_center_x, board_center_y = self.pixelToWorld(int(um), int(vm), self.M)
 
         self.box_array.box = [float(board_center_x), float(board_center_y), float(angle)]
-            
-        ''' 
-        # Center pixel HSV value for debugging and tuning
-        (H, W, D) = frame.shape
-        uc = W//2
-        vc = H//2
-        frame = cv2.line(frame, (uc,0), (uc,H-1), (255, 255, 255), 1)
-        frame = cv2.line(frame, (0,vc), (W-1,vc), (255, 255, 255), 1)
-        self.get_logger().info(
-            "Center pixel HSV = (%3d, %3d, %3d)" % tuple(hsv[vc, uc]))
-        '''
 
+
+        dish_right_edge_center = self.pixelToWorld(dish_x + dish_w, dish_y + dish_h/2, self.M)
+        self.get_logger().info('Dish Right Edge Center: %s' % str(dish_right_edge_center))
+        dish_point = Point()
+        dish_point.x = (float)(dish_right_edge_center[0])
+        dish_point.y = (float)(dish_right_edge_center[1])
+        dish_point.z = 0.0
+        self.pub_dish_location.publish(dish_point)
+            
         self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
         self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))
         self.pub_obj_array.publish(self.object_array)
