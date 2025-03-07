@@ -173,7 +173,7 @@ class DemoNode(Node):
                 self.obj_arr_msg.objects.append(obj)
 
             for obj in self.obj_arr_msg.objects:
-                if obj.type == Object.DISK:
+                if obj.type == Object.PURPLE_DISK:
                     disc_world_msg = Point()
                     disc_world_msg.x = obj.x
                     disc_world_msg.y = obj.y
@@ -233,7 +233,7 @@ class DemoNode(Node):
                 self.obj_arr_msg.objects.append(obj)
 
             for obj in self.obj_arr_msg.objects:
-                if obj.type == Object.DISK:
+                if obj.type == Object.PURPLE_DISK:
                     disc_world_msg = Point()
                     disc_world_msg.x = obj.x
                     disc_world_msg.y = obj.y

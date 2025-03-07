@@ -12,7 +12,7 @@ from geometry_msgs.msg  import Point
 
 from project_msgs.msg import Object, ObjectArray, BoxArray
 
-from snakes_and_ladders.constants import HSV_LIMITS_PURPLE, HSV_LIMITS_DISH, LOGGER_LEVEL
+from snakes_and_ladders.constants import HSV_LIMITS_PURPLE, HSV_LIMITS_DISH, HSV_LIMITS_BLUE, LOGGER_LEVEL
  
 
 def average_list(list):
@@ -179,30 +179,10 @@ class DetectorNode(Node):
         return xyObj
     
 
-    def process(self, msg):
-        self.object_array.objects = []
-        self.box_array.box = []
-
-        assert(msg.encoding == 'rgb8')
-        frame = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
-
-        dish_x, dish_y, dish_w, dish_h = self.dish_detector(frame)
-
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        binary = cv2.inRange(hsv, HSV_LIMITS_PURPLE[:, 0], HSV_LIMITS_PURPLE[:, 1])
-
-        old_M = self.M
-        self.calibrate(frame, self.x0, self.y0, annotateImage=True)
-        #self.calibrate_dice_box(frame, self.x1, self.y1, annotateImage=True)
-
-        if type(self.M) is not np.ndarray:
-            self.get_logger().debug('Calibration failed')
-            self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
-            self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))
-            return
-        elif old_M is not None and not np.allclose(self.M, old_M):
-            #self.get_logger().info('Calibration updated')
-            pass
+    def player_detector(self, frame, hsv_limits, object_type):
+        self.get_logger().info('Detecting %s' % object_type)
+        hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+        binary = cv2.inRange(hsv, hsv_limits[:, 0], hsv_limits[:, 1])
 
         iter = 2
         binary = cv2.erode(binary, None, iterations=iter)
@@ -215,34 +195,57 @@ class DetectorNode(Node):
         cv2.drawContours(frame, contours, -1, self.blue, 1)
 
         if len(contours) > 0:
-            for contour in sorted(contours, key=cv2.contourArea, reverse=True):
-                ((ur, vr), radius) = cv2.minEnclosingCircle(contour)
-                ur = int(ur)
-                vr = int(vr)
-                radius = int(radius)
+            contours = sorted(contours, key=cv2.contourArea, reverse=True)
+            ((u, v), radius) = cv2.minEnclosingCircle(contours[0])
+            u = int(u)
+            v = int(v)
+            radius = int(radius)
 
-                try:
-                    ellipse = cv2.fitEllipse(contour)
-                    ((ue, ve), (we, he), angle) = ellipse
-                except Exception as e:
-                    #self.get_logger().info("Exception: %s" % str(e))
-                    ellipse = None
+            try:
+                ellipse = cv2.fitEllipse(contours[0])
+                ((ue, ve), (we, he), angle) = ellipse
+            except Exception as e:
+                ellipse = None
 
-                if ellipse is not None:
-                    cv2.ellipse(frame, ellipse, self.green, 1)
-                    # cv2.circle(frame, (int(ue), int(ve)), 5, self.red, -1)
-                    disk_world = self.pixelToWorld(int(ue), int(ve), self.M)
-                    if disk_world is not None:
-                        disk_world_x, disk_world_y = disk_world
-                        #self.get_logger().debug('Piece Location: (%s, %s)' % (disk_world_x, disk_world_y))
-                        obj_disk = Object()
-                        obj_disk.type = Object.DISK
-                        obj_disk.x = float(disk_world_x)
-                        obj_disk.y = float(disk_world_y)
-                        obj_disk.z = 0.0
-                        obj_disk.theta = 0.0
-                        
-                        self.object_array.objects.append(obj_disk)
+            if ellipse is not None:
+                cv2.ellipse(frame, ellipse, self.green, 2)
+                obj_player_world = self.pixelToWorld(int(ue), int(ve), self.M)
+                if obj_player_world is not None:
+                    obj_player_world_x, obj_player_world_y = obj_player_world
+                    obj_player = Object()
+                    obj_player.type = object_type
+                    obj_player.x = float(obj_player_world_x)
+                    obj_player.y = float(obj_player_world_y)
+                    obj_player.z = 0.0
+                    obj_player.theta = 0.0
+                    self.object_array.objects.append(obj_player)
+
+        if object_type == Object.PURPLE_DISK:
+            self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))
+
+
+    def process(self, msg):
+        self.object_array.objects = []
+        self.box_array.box = []
+
+        assert(msg.encoding == 'rgb8')
+        frame = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
+
+        dish_x, dish_y, dish_w, dish_h = self.dish_detector(frame)
+
+        old_M = self.M
+        self.calibrate(frame, self.x0, self.y0, annotateImage=True)
+
+        if type(self.M) is not np.ndarray:
+            self.get_logger().debug('Calibration failed')
+            self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
+            return
+        elif old_M is not None and not np.allclose(self.M, old_M):
+            self.get_logger().info('Calibration updated')
+            pass
+
+        self.player_detector(frame, HSV_LIMITS_PURPLE, Object.PURPLE_DISK)
+        self.player_detector(frame, HSV_LIMITS_BLUE, Object.BLUE_DISK)
 
         [um, vm, wm, hm, angle] = self.board_detector(frame)
         board_center_x, board_center_y = self.pixelToWorld(int(um), int(vm), self.M)
@@ -258,7 +261,6 @@ class DetectorNode(Node):
         self.pub_dish_location.publish(dish_point)
             
         self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
-        self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))
         self.pub_obj_array.publish(self.object_array)
         self.pub_box_array.publish(self.box_array)
 

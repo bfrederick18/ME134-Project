@@ -13,7 +13,8 @@ WAITING_POS = [-pi / 12 * 5, 0.0, -pi / 2, 0.0, 0.0]  # [0.0, 0.0, -pi / 2, 0.0,
 
 JOINT_NAMES = ['base', 'shoulder', 'elbow', 'wrist', 'gripper']
 
-HSV_LIMITS_PURPLE = np.array([[170, 190], [90, 140], [40, 120]])
+HSV_LIMITS_PURPLE = np.array([[119, 140], [62, 189], [81, 125]])
+HSV_LIMITS_BLUE = np.array([[105, 109], [191, 222], [138, 161]])
 HSV_LIMITS_DISH = np.array([[9, 14], [96, 169], [138, 196]])
 
 GRIPPER_CLOSE_PURPLE = -0.4
