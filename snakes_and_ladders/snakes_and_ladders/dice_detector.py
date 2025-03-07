@@ -220,19 +220,21 @@ class DetectorNode(Node):
             rect[2] = pts[np.argmax(s)]  # Bottom-right
             rect[1] = pts[np.argmin(diff)]  # Top-right
             rect[3] = pts[np.argmax(diff)]  # Bottom-left
-
+            
             return rect
+        
 
         ordered_box = order_points(box)
+        #self.get_logger().info('uv box: %s' % ordered_box)
         
          #Actual W and H 
         dst_width = 0.13/2  
         dst_height = 0.13/2
         
         dst_points = np.array([
-            [self.dish_x - dst_width, self.dish_y + dst_height],  # Top-left
-            [self.dish_x + dst_width, self.dish_y + dst_height],  # Top-right
-            [self.dish_x - dst_width, self.dish_y - dst_height],  # Bottom-right
+            [self.dish_x - dst_width, self.dish_y - dst_height],  # Top-left
+            [self.dish_x - dst_width, self.dish_y + dst_height],  # Top-right
+            [self.dish_x + dst_width, self.dish_y + dst_height],  # Bottom-right
             [self.dish_x + dst_width, self.dish_y - dst_height]  # Bottom-left
         ], dtype=np.float32)
         

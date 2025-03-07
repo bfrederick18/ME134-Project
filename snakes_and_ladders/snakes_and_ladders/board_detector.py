@@ -249,7 +249,6 @@ class DetectorNode(Node):
 
         self.box_array.box = [float(board_center_x), float(board_center_y), float(angle)]
 
-
         dish_right_edge_center = self.pixelToWorld(dish_x + dish_w, dish_y + dish_h/2, self.M)
         self.get_logger().info('Dish Right Edge Center: %s' % str(dish_right_edge_center))
         dish_point = Point()
