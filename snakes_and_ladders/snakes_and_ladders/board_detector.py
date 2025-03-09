@@ -54,6 +54,7 @@ class DetectorNode(Node):
         self.pub_board = self.create_publisher(Image, name +'/board', 3)
         self.pub_dish_hsv = self.create_publisher(Image, name +'/dish_hsv', 3)
         self.pub_dish_binary = self.create_publisher(Image, name +'/dish_binary', 3)
+        
         self.pub_dish_detector = self.create_publisher(Image, name +'/dish_detector', 3)
         self.pub_obj_array = self.create_publisher(ObjectArray, name + '/object_array', 1)
         self.pub_blue_obj_array = self.create_publisher(ObjectArray, name + '/blue_object_array', 1)

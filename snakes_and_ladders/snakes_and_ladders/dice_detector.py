@@ -10,6 +10,7 @@ from sensor_msgs.msg    import Image
 from geometry_msgs.msg  import Point
 from std_msgs.msg import Int16
 from project_msgs.msg import Num, BoxArray
+from snakes_and_ladders.constants import HSV_LIMITS_SIDECAM
         
 
 def average_list(list):
@@ -60,6 +61,8 @@ class DetectorNode(Node):
         self.pub_dice_number_roi = self.create_publisher(Image, name + '/dice_number_roi', 3)
         self.pub_dice_dish_gray = self.create_publisher(Image, name + '/dice_dish_gray', 3)
         self.pub_dice_dish_edge = self.create_publisher(Image, name + '/dice_dish_edge', 3)
+        self.pub_dish_hsv = self.create_publisher(Image, name +'/dish_hsv', 3)
+        self.pub_dish_binary = self.create_publisher(Image, name +'/dish_binary', 3)
         self.pub_roll = self.create_publisher(Int16, name + '/int16', 1)
         self.dice_roll_pub = self.create_publisher(Num, name + '/num', 1)
         self.pub_box_array = self.create_publisher(BoxArray, name + '/box_array', 1)
@@ -136,11 +139,11 @@ class DetectorNode(Node):
             gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
 
             # Apply Gaussian blur
-            blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+            blurred = cv2.GaussianBlur(gray, (5, 5), 1)
 
             # Apply Hough Circle Transform
-            circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1.0, 3,
-                                    param1=25, param2=14, minRadius=4, maxRadius=7)
+            circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1, 3,
+                                    param1=25, param2=14, minRadius=3, maxRadius=7)  #1.0, 3, 25, 14, 4, 7
             
             self.pub_dice_number_gray.publish(self.bridge.cv2_to_imgmsg(gray))
             self.pub_dice_number_blurred.publish(self.bridge.cv2_to_imgmsg(blurred))
@@ -151,22 +154,27 @@ class DetectorNode(Node):
                 # self.get_logger().info("Circle radiuses: %s" % circles)
                 
                 #pip_centers = [(cx, cy) for (cx, cy, r) in circles]
+                #pip_centers.sort(key=lambda p: p[1])
                 # Draw the circles
                 for (cx, cy, r) in circles:
                     cv2.circle(roi, (cx, cy), r, (0, 255, 0), 2)
                 
 
                 # if len(circles) == 5:
-                #     center_x = np.mean([p[0] for p in pip_centers])
-                #     center_y = np.mean([p[1] for p in pip_centers])
-                    
-                #     distances = [((cx - center_x) ** 2 + (cy - center_y) ** 2) ** 0.5 for cx, cy in pip_centers]
-                    
-                #     #If 4 points are at equal distance from the center, it's likely a cross
-                #     if np.std(distances) < 10:  # Adjust threshold as needed
-                #         return 5
-                #     else:
+                #     y_vals = [p[1] for p in pip_centers]
+                #     row_diff = np.diff(sorted(y_vals))
+                #     if len(set(row_diff)) <= 2:  # If y-values form two distinct rows
                 #         return 6
+                # #     center_x = np.mean([p[0] for p in pip_centers])
+                # #     center_y = np.mean([p[1] for p in pip_centers])
+                    
+                # #     distances = [((cx - center_x) ** 2 + (cy - center_y) ** 2) ** 0.5 for cx, cy in pip_centers]
+                    
+                # #     #If 4 points are at equal distance from the center, it's likely a cross
+                # #     if np.std(distances) < 10:  # Adjust threshold as needed
+                # #         return 5
+                #     else:
+                #         return 5
 
                                     
                 self.pub_dice_number_roi.publish(self.bridge.cv2_to_imgmsg(roi, "rgb8"))
@@ -176,70 +184,89 @@ class DetectorNode(Node):
 
 
     def detect_dice_dish(self, frame):
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        dish_dectector_frame = frame.copy()
+        hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+        binary = cv2.inRange(hsv, HSV_LIMITS_SIDECAM[:, 0], HSV_LIMITS_SIDECAM[:, 1])
+        self.pub_dish_hsv.publish(self.bridge.cv2_to_imgmsg(hsv, 'rgb8'))
+        # self.pub_dish_binary.publish(self.bridge.cv2_to_imgmsg(binary))
 
-        edges = cv2.Canny(gray, 40, 150)
-        self.pub_dice_dish_edge.publish(self.bridge.cv2_to_imgmsg(edges, "mono8"))
+        iter = 2
+        binary = cv2.erode(binary, None, iterations=iter)
+        binary = cv2.dilate(binary, None, iterations=2*iter)
+        binary = cv2.erode(binary, None, iterations=iter)
+
+        self.pub_dish_binary.publish(self.bridge.cv2_to_imgmsg(binary))
+
+        (contours, hierarchy) = cv2.findContours(
+            binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # cv2.drawContours(dish_dectector_frame, contours, -1, self.blue, 1)
         
-        # Find contours and select the largest one (assumed to be the dish)
-        contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # edges = cv2.Canny(gray, 40, 200)
+        # self.pub_dice_dish_edge.publish(self.bridge.cv2_to_imgmsg(edges, "mono8"))
+        
+        # # Find contours and select the largest one (assumed to be the dish)
+        # contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours = sorted(contours, key=cv2.contourArea, reverse=True)
         
         if len(contours) == 0:
             return None  # No contours found
         
         dish_contour = contours[0]  # Largest contour (assumed to be the dish)
-
+        
          # Get the minimum area rectangle
         rotated_rectangle = cv2.minAreaRect(dish_contour)
         ((um, vm), (wm, hm), angle) = rotated_rectangle
-        
-         # Get the 4 corner points of the rectangle
-        box = np.int0(cv2.boxPoints(rotated_rectangle))  # Returns 4 points
-        cv2.drawContours(gray, [box], -1, (0, 255, 0), 2)
 
-        for contour in contours:
-            a_rotated_rectangle = cv2.minAreaRect(contour)
-            ((a_um, a_vm), (a_wm, a_hm), a_angle) = a_rotated_rectangle
-            a_box = np.int0(cv2.boxPoints(a_rotated_rectangle))  # Returns 4 points
-            # cv2.drawContours(gray, [a_box], -1, (0, 255, 0), 2)
+        area = cv2.contourArea(dish_contour)
+        #self.get_logger().info('box: %s' % area)
+        if area >= 100000 and area <= 150000:
+            # Get the 4 corner points of the rectangle
+            box = np.int0(cv2.boxPoints(rotated_rectangle))  # Returns 4 points
+            cv2.drawContours(dish_dectector_frame, [box], -1, (0, 255, 0), 2)
 
-        self.pub_dice_dish_gray.publish(self.bridge.cv2_to_imgmsg(gray, "mono8"))
+            # for contour in contours:
+            #     a_rotated_rectangle = cv2.minAreaRect(contour)
+            #     ((a_um, a_vm), (a_wm, a_hm), a_angle) = a_rotated_rectangle
+            #     a_box = np.int0(cv2.boxPoints(a_rotated_rectangle))  # Returns 4 points
+            #     # cv2.drawContours(gray, [a_box], -1, (0, 255, 0), 2)
 
-         # Sort the box points to get a consistent order: top-left, top-right, bottom-right, bottom-left
-        box = sorted(box, key=lambda x: (x[1], x[0]))  # Sort by y first, then x
-        
-        def order_points(pts):
-            pts = np.array(pts, dtype="float32")
-            rect = np.zeros((4, 2), dtype="float32")
-            s = pts.sum(axis=1)
-            diff = np.diff(pts, axis=1)
 
-            rect[0] = pts[np.argmin(s)]  # Top-left
-            rect[2] = pts[np.argmax(s)]  # Bottom-right
-            rect[1] = pts[np.argmin(diff)]  # Top-right
-            rect[3] = pts[np.argmax(diff)]  # Bottom-left
+            # Sort the box points to get a consistent order: top-left, top-right, bottom-right, bottom-left
+            box = sorted(box, key=lambda x: (x[1], x[0]))  # Sort by y first, then x
+            def order_points(pts):
+                pts = np.array(pts, dtype="float32")
+                rect = np.zeros((4, 2), dtype="float32")
+                s = pts.sum(axis=1)
+                diff = np.diff(pts, axis=1)
+
+                rect[0] = pts[np.argmin(s)]  # Top-left
+                rect[2] = pts[np.argmax(s)]  # Bottom-right
+                rect[1] = pts[np.argmin(diff)]  # Top-right
+                rect[3] = pts[np.argmax(diff)]  # Bottom-left
+                
+                return rect
             
-            return rect
-        
 
-        ordered_box = order_points(box)
-        #self.get_logger().info('uv box: %s' % ordered_box)
-        
-         #Actual W and H 
-        dst_width = 0.13/2  
-        dst_height = 0.13/2
-        
-        dst_points = np.array([
-            [self.dish_x - dst_width, self.dish_y - dst_height],  # Top-left
-            [self.dish_x - dst_width, self.dish_y + dst_height],  # Top-right
-            [self.dish_x + dst_width, self.dish_y + dst_height],  # Bottom-right
-            [self.dish_x + dst_width, self.dish_y - dst_height]  # Bottom-left
-        ], dtype=np.float32)
-        
+            ordered_box = order_points(box)
+            #self.get_logger().info('uv box: %s' % ordered_box)
+            
+            #Actual W and H 
+            dst_width = 0.124/2  #0.13 shrunk bc sharpie
+            dst_height = 0.12/2 #0.13 shrunk bc sharpie
+            
+            dst_points = np.array([
+                [self.dish_x - dst_width, self.dish_y - dst_height],  # Top-left
+                [self.dish_x - dst_width, self.dish_y + dst_height],  # Top-right
+                [self.dish_x + dst_width, self.dish_y + dst_height],  # Bottom-right
+                [self.dish_x + dst_width, self.dish_y - dst_height]  # Bottom-left
+            ], dtype=np.float32)
+            
+            #self.pub_dice_dish_gray.publish(self.bridge.cv2_to_imgmsg(dish_dectector_frame, "rgb8"))
+            #Compute the perspective transformation matrix
+            self.M = cv2.getPerspectiveTransform(np.float32(ordered_box), dst_points) 
 
-        #Compute the perspective transformation matrix
-        self.M = cv2.getPerspectiveTransform(np.float32(ordered_box), dst_points) 
         #self.get_logger().info('M: %s' % self.M)
     
     # def calibrate(self, image, x0, y0, annotateImage=True): 
@@ -313,6 +340,25 @@ class DetectorNode(Node):
         self.dice_roll.num = self.dice_roll_rounded
         self.get_logger().info("Dice Reading: %s" % self.dice_roll_rounded)
         self.dice_roll_pub.publish(self.dice_roll)"""
+         # # Help to determine the HSV range...
+
+        # frame = self.bridge.imgmsg_to_cv2(msg, "passthrough")
+        # # Convert to HSV
+        # hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+        # # hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)  # Cheat: swap red/blue
+
+        # # Grab the image shape, determine the center pixel.
+        # (H, W, D) = frame.shape
+        # uc = W//2
+        # vc = H//2
+        # if True:
+        #     # Draw the center lines.  Note the row is the first dimension.
+        #     frame = cv2.line(frame, (uc,0), (uc,H-1), self.white, 1)
+        #     frame = cv2.line(frame, (0,vc), (W-1,vc), self.white, 1)
+
+        #     # Report the center HSV values.  Note the row comes first.
+        #     self.get_logger().info(
+        #         "HSV = (%3d, %3d, %3d)" % tuple(hsv[vc, uc]))
 
         die_roll = self.detect_die_number(frame)
         if die_roll is not None:
@@ -341,7 +387,7 @@ class DetectorNode(Node):
             # dice_world = self.dish_x + dice_center_x, self.dish_y + dice_center_y
             self.box_array.box = [float(dice_center_x), float(dice_center_y)]
             self.pub_box_array.publish(self.box_array)
-            #self.get_logger().info("dice location: %s, %s" % (dice_center_x, dice_center_y))
+            self.get_logger().info("dice location: %s, %s" % (dice_center_x, dice_center_y))
         self.pubrgb.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
         # self.pub_obj_array.publish(self.object_array)
         #self.pubbin.publish(self.bridge.cv2_to_imgmsg(binary))

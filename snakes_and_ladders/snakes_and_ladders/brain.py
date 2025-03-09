@@ -67,6 +67,8 @@ class DemoNode(Node):
         self.reset_pt = False
         self.curr_player_pos = []
         self.prev_player_pos = []
+        self.human_player_pos = 0
+        self.prev_human_player_pos = 0
 
         self.pub_segs = self.create_publisher(SegmentArray, name + '/segment_array', 1)
         self.board_location = self.create_subscription(
@@ -183,8 +185,6 @@ class DemoNode(Node):
                 self.prev_player_pos = self.curr_player_pos
                 self.curr_player_pos = [player_world_msg.x, player_world_msg.y, player_world_msg.z]
                 self.blue_counter = 0
-        self.get_logger().info('Blue Piece Position %s' % self.curr_player_pos)
-
 
     def recv_obj_array(self, msg):
         if self.reset == True and self.obt_board_positions == True:
@@ -365,32 +365,42 @@ class DemoNode(Node):
 
     def recv_dice_box_array(self, msg):        
         if self.received_dice_roll == False and self.counter % 2 == 1 and self.num_pub_dice == 0:
-            self.get_logger().debug('Stuck')
             if (abs(self.curr_player_pos[0] - self.prev_player_pos[0]) > 0.01 or abs(self.curr_player_pos[1] - self.prev_player_pos[1]) > 0.01):
-                self.get_logger().debug('Rolling dice')
-                self.dice_face_msg.box = []
-                for box in msg.box:
-                    self.dice_face_msg.box.append(box)
-                
-                Tmove = CYCLE / 2
-                dice_rest_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.04] # self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01
-                #dice_rest_pos = [1.338, 0.301, 0.04]
-                lifted_dice_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.11]
-                #lifted_dice_pos = [1.338, 0.301, 0.11]
+                self.prev_human_player_pos = self.human_player_pos
+                if self.human_player_pos == 0:
+                    human_player = 1
+                else:
+                    human_player = self.prev_human_player_pos + self.dice_roll
+                self.get_logger().debug('Human player position: %s' % human_player)
+                self.get_logger().debug('Player Position: (%s, %s)' % (self.curr_player_pos[0], self.curr_player_pos[1]))
+                if (abs(self.curr_player_pos[0] - self.board_positions[human_player][0]) > 0.04 or\
+                    abs(self.curr_player_pos[1] - self.board_positions[human_player][1]) > 0.04):
+                    self.get_logger().debug('CHEATING DETECTED!!!! RETURN PLAYER TO PROPER PLACE TO CONTINUE GAME')
+                else:
+                    self.get_logger().debug('Rolling dice')
+                    self.dice_face_msg.box = []
+                    for box in msg.box:
+                        self.dice_face_msg.box.append(box)
+                    self.human_player_pos = human_player
+                    Tmove = CYCLE / 2
+                    dice_rest_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.04] # self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01
+                    #dice_rest_pos = [1.338, 0.301, 0.04]
+                    lifted_dice_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.11]
+                    #lifted_dice_pos = [1.338, 0.301, 0.11]
 
-                q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
-                q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
-                #q_dice_drop[3] = -np.pi/2
-                
-                self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2*Tmove, gripper_val=GRIPPER_INTERMEDIATE))  # going to dice
-                self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # gripping the dice
-                self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # lifting dice up
-                self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove))  # dropping the dice
-                self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))  # waiting 
+                    q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
+                    q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
+                    #q_dice_drop[3] = -np.pi/2
+                    
+                    self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2*Tmove, gripper_val=GRIPPER_INTERMEDIATE))  # going to dice
+                    self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # gripping the dice
+                    self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # lifting dice up
+                    self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove))  # dropping the dice
+                    self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))  # waiting 
 
-                self.pub_segs.publish(self.seg_arr_msg)
-                self.num_pub_dice += 1
-                self.seg_arr_msg.segments = []
+                    self.pub_segs.publish(self.seg_arr_msg)
+                    self.num_pub_dice += 1
+                    self.seg_arr_msg.segments = []
 
 
     def recv_box_array(self, msg):
