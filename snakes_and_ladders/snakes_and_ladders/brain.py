@@ -54,6 +54,7 @@ class DemoNode(Node):
         self.board_positions = {}
         self.bridge = cv_bridge.CvBridge()
         self.counter = 0
+        self.blue_counter = 0
         self.num_pub_dice = 1
         self.num_pub_player = 1
         self.reset = False
@@ -120,6 +121,7 @@ class DemoNode(Node):
                 # return q.tolist()
             
         # return WAITING_POS[0:4]
+        self.get_logger().info("Newton-Raphson failed to converge in %d iterations" % N)
         return WAITING_POS
 
     def create_transitional(self, initial_segment, final_segment, Tmove):
@@ -170,17 +172,19 @@ class DemoNode(Node):
             #self.received_dice_roll = False
 
     def recv_blue_obj_array(self, msg):
-        self.blue_obj_arr_msg.objects = []
         for obj in msg.objects:
-            self.blue_obj_arr_msg.objects.append(obj)
-        for obj in self.blue_obj_arr_msg.objects:
             if obj.type == Object.BLUE_DISK:
-                self.prev_player_pos = self.curr_player_pos
                 player_world_msg = Point()
                 player_world_msg.x = obj.x
                 player_world_msg.y = obj.y
                 player_world_msg.z = 0.012
+                self.blue_counter += 1
+            if self.blue_counter == 15:
+                self.prev_player_pos = self.curr_player_pos
                 self.curr_player_pos = [player_world_msg.x, player_world_msg.y, player_world_msg.z]
+                self.blue_counter = 0
+        self.get_logger().info('Blue Piece Position %s' % self.curr_player_pos)
+
 
     def recv_obj_array(self, msg):
         if self.reset == True and self.obt_board_positions == True:
@@ -197,15 +201,6 @@ class DemoNode(Node):
                     disc_world_msg.y = obj.y
                     disc_world_msg.z = 0.012
                     self.point_array.append(disc_world_msg)
-                # elif obj.type == Object.BLUE_DISK:
-                #     self.prev_player_pos = self.curr_player_pos
-                #     player_world_msg = Point()
-                #     player_world_msg.x = obj.x
-                #     player_world_msg.y = obj.y
-                #     player_world_msg.z = 0.012
-                #     self.curr_player_pos = [player_world_msg.x, player_world_msg.y, player_world_msg.z]
-
-            #self.get_logger().info('Player point: %s' % (self.prev_player_pos))
 
             if len(self.point_array) > 0 and self.x_waiting != []:
                 cart_points = [self.x_waiting]
@@ -265,13 +260,6 @@ class DemoNode(Node):
                     disc_world_msg.y = obj.y
                     disc_world_msg.z = 0.012
                     self.point_array.append(disc_world_msg)
-                # elif obj.type == Object.BLUE_DISK:
-                #     self.prev_player_pos = self.curr_player_pos
-                #     player_world_msg = Point()
-                #     player_world_msg.x = obj.x
-                #     player_world_msg.y = obj.y
-                #     player_world_msg.z = 0.012
-                #     self.curr_player_pos = [player_world_msg.x, player_world_msg.y, player_world_msg.z]
 
             if len(self.point_array) > 0 and self.x_waiting != []:
                 cart_points = [self.x_waiting]
@@ -378,7 +366,7 @@ class DemoNode(Node):
     def recv_dice_box_array(self, msg):        
         if self.received_dice_roll == False and self.counter % 2 == 1 and self.num_pub_dice == 0:
             self.get_logger().debug('Stuck')
-            if (abs(self.curr_player_pos[0] - self.prev_player_pos[0]) > 0.05 or abs(self.curr_player_pos[1] - self.prev_player_pos[1]) > 0.05):
+            if (abs(self.curr_player_pos[0] - self.prev_player_pos[0]) > 0.01 or abs(self.curr_player_pos[1] - self.prev_player_pos[1]) > 0.01):
                 self.get_logger().debug('Rolling dice')
                 self.dice_face_msg.box = []
                 for box in msg.box:
