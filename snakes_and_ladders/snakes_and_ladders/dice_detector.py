@@ -79,8 +79,7 @@ class DetectorNode(Node):
         self.dish_x = msg.x + 0.102
         self.dish_y = msg.y
         
-        self.get_logger().info("Dish Location: %s, %s" % (self.dish_x, self.dish_y))
-
+        #self.get_logger().info("Dish Location: %s, %s" % (self.dish_x, self.dish_y))
 
     def detect_dice_face(self, frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -120,8 +119,8 @@ class DetectorNode(Node):
         else:
             x, y, w, h = dice_face
 
-            w += 20
-            h += 20
+            w += 40
+            h += 40
             w, h = max(1, int(w)), max(1, int(h))
 
             # Compute ROI coordinates
@@ -134,40 +133,40 @@ class DetectorNode(Node):
                 return None
 
             # Convert to grayscale
-            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
 
             # Apply Gaussian blur
-            # blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+            blurred = cv2.GaussianBlur(gray, (3, 3), 0)
 
             # Apply Hough Circle Transform
-            circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 0.5, 3,
-                                    param1=30, param2=17, minRadius=3, maxRadius=10)
+            circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1.0, 3,
+                                    param1=25, param2=14, minRadius=4, maxRadius=7)
             
             self.pub_dice_number_gray.publish(self.bridge.cv2_to_imgmsg(gray))
-            # self.pub_dice_number_blurred.publish(self.bridge.cv2_to_imgmsg(blurred, "mono8"))
+            self.pub_dice_number_blurred.publish(self.bridge.cv2_to_imgmsg(blurred))
 
             # Ensure at least some circles were found
             if circles is not None:
                 circles = np.round(circles[0, :]).astype("int")
                 # self.get_logger().info("Circle radiuses: %s" % circles)
                 
-                pip_centers = [(cx, cy) for (cx, cy, r) in circles]
+                #pip_centers = [(cx, cy) for (cx, cy, r) in circles]
                 # Draw the circles
                 for (cx, cy, r) in circles:
                     cv2.circle(roi, (cx, cy), r, (0, 255, 0), 2)
                 
 
-                if len(circles) == 5:
-                    center_x = np.mean([p[0] for p in pip_centers])
-                    center_y = np.mean([p[1] for p in pip_centers])
+                # if len(circles) == 5:
+                #     center_x = np.mean([p[0] for p in pip_centers])
+                #     center_y = np.mean([p[1] for p in pip_centers])
                     
-                    distances = [((cx - center_x) ** 2 + (cy - center_y) ** 2) ** 0.5 for cx, cy in pip_centers]
+                #     distances = [((cx - center_x) ** 2 + (cy - center_y) ** 2) ** 0.5 for cx, cy in pip_centers]
                     
-                    #If 4 points are at equal distance from the center, it's likely a cross
-                    if np.std(distances) < 10:  # Adjust threshold as needed
-                        return 5
-                    else:
-                        return 6
+                #     #If 4 points are at equal distance from the center, it's likely a cross
+                #     if np.std(distances) < 10:  # Adjust threshold as needed
+                #         return 5
+                #     else:
+                #         return 6
 
                                     
                 self.pub_dice_number_roi.publish(self.bridge.cv2_to_imgmsg(roi, "rgb8"))
@@ -292,7 +291,7 @@ class DetectorNode(Node):
             self.get_logger().debug('Calibration failed')
             return
         
-        die_roll = self.detect_die_number(frame)
+        """die_roll = self.detect_die_number(frame)
         if die_roll is not None:
             self.die_rolls.append(die_roll)
             if len(self.die_rolls) == 40 and self.counter == 0:
@@ -313,7 +312,28 @@ class DetectorNode(Node):
 
         self.dice_roll.num = self.dice_roll_rounded
         self.get_logger().info("Dice Reading: %s" % self.dice_roll_rounded)
+        self.dice_roll_pub.publish(self.dice_roll)"""
+
+        die_roll = self.detect_die_number(frame)
+        if die_roll is not None:
+            self.die_rolls.append(die_roll)
+            
+            if len(self.die_rolls) > 50:
+                self.die_rolls.pop(0)
+            
+            avg_reading = sum(self.die_rolls) / len(self.die_rolls)
+            round_read = math.ceil(avg_reading)
+            self.dice_roll_rounded = round_read
+        else:
+            self.get_logger().info("NO DIE DETECTED!!!")
+            self.die_rolls = []
+
+        dice_frame = self.detect_dice_face(frame)
+
+        self.dice_roll.num = self.dice_roll_rounded
+        self.get_logger().info("Dice Reading: %s" % self.dice_roll_rounded)
         self.dice_roll_pub.publish(self.dice_roll)
+
 
         if dice_frame is not None:
             x, y, w, h = dice_frame
@@ -321,7 +341,7 @@ class DetectorNode(Node):
             # dice_world = self.dish_x + dice_center_x, self.dish_y + dice_center_y
             self.box_array.box = [float(dice_center_x), float(dice_center_y)]
             self.pub_box_array.publish(self.box_array)
-            self.get_logger().info("dice location: %s, %s" % (dice_center_x, dice_center_y))
+            #self.get_logger().info("dice location: %s, %s" % (dice_center_x, dice_center_y))
         self.pubrgb.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
         # self.pub_obj_array.publish(self.object_array)
         #self.pubbin.publish(self.bridge.cv2_to_imgmsg(binary))

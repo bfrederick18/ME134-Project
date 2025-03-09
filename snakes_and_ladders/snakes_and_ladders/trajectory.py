@@ -92,9 +92,9 @@ class DemoNode(Node):
         self.start_up_seq[3] = WAITING_POS[:]
         self.get_logger().info("Start up sequence: %r" % self.start_up_seq)
 
-        self.A = -3.3
+        self.A = -3.85
         self.B = 0
-        self.C = -2.8
+        self.C = -2.7
         self.D = 0
 
         self.segments = []

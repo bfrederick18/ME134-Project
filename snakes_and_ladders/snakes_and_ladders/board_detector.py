@@ -45,6 +45,7 @@ class DetectorNode(Node):
         self.M = None
         self.M2 = None
         self.object_array = ObjectArray()
+        self.blue_object_array = ObjectArray()
         self.box_array = BoxArray()
         self.bridge = cv_bridge.CvBridge()
         
@@ -55,6 +56,7 @@ class DetectorNode(Node):
         self.pub_dish_binary = self.create_publisher(Image, name +'/dish_binary', 3)
         self.pub_dish_detector = self.create_publisher(Image, name +'/dish_detector', 3)
         self.pub_obj_array = self.create_publisher(ObjectArray, name + '/object_array', 1)
+        self.pub_blue_obj_array = self.create_publisher(ObjectArray, name + '/blue_object_array', 1)
         self.pub_box_array = self.create_publisher(BoxArray, name + '/box_array', 1)
 
         self.pub_dish_location = self.create_publisher(Point, name + '/dish_location', 1)
@@ -218,20 +220,22 @@ class DetectorNode(Node):
                     obj_player.y = float(obj_player_world_y)
                     obj_player.z = 0.0
                     obj_player.theta = 0.0
-                    self.object_array.objects.append(obj_player)
+                    if obj_player.type == Object.BLUE_DISK:
+                        self.blue_object_array.objects.append(obj_player)
+                    else:
+                        self.object_array.objects.append(obj_player)
 
         if object_type == Object.PURPLE_DISK:
-            self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))
+            self.pub_binary.publish(self.bridge.cv2_to_imgmsg(binary))            
 
 
     def process(self, msg):
         self.object_array.objects = []
+        self.blue_object_array.objects = []
         self.box_array.box = []
 
         assert(msg.encoding == 'rgb8')
         frame = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
-
-        dish_x, dish_y, dish_w, dish_h = self.dish_detector(frame)
 
         old_M = self.M
         self.calibrate(frame, self.x0, self.y0, annotateImage=True)
@@ -244,6 +248,17 @@ class DetectorNode(Node):
             self.get_logger().info('Calibration updated')
             pass
 
+
+        dice_dish = self.dish_detector(frame)
+        if dice_dish is not None:
+            dish_x, dish_y, dish_w, dish_h = dice_dish
+            dish_right_edge_center = self.pixelToWorld(dish_x + dish_w, dish_y + dish_h/2, self.M)
+            dish_point = Point()
+            dish_point.x = (float)(dish_right_edge_center[0])
+            dish_point.y = (float)(dish_right_edge_center[1])
+            dish_point.z = 0.0
+            self.pub_dish_location.publish(dish_point)
+
         self.player_detector(frame, HSV_LIMITS_PURPLE, Object.PURPLE_DISK)
         self.player_detector(frame, HSV_LIMITS_BLUE, Object.BLUE_DISK)
 
@@ -251,17 +266,11 @@ class DetectorNode(Node):
         board_center_x, board_center_y = self.pixelToWorld(int(um), int(vm), self.M)
 
         self.box_array.box = [float(board_center_x), float(board_center_y), float(angle)]
-
-        dish_right_edge_center = self.pixelToWorld(dish_x + dish_w, dish_y + dish_h/2, self.M)
-        self.get_logger().info('Dish Right Edge Center: %s' % str(dish_right_edge_center))
-        dish_point = Point()
-        dish_point.x = (float)(dish_right_edge_center[0])
-        dish_point.y = (float)(dish_right_edge_center[1])
-        dish_point.z = 0.0
-        self.pub_dish_location.publish(dish_point)
+        #self.get_logger().info('Blue Piece: %s' % self.blue_object_array)
             
         self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
         self.pub_obj_array.publish(self.object_array)
+        self.pub_blue_obj_array.publish(self.blue_object_array)
         self.pub_box_array.publish(self.box_array)
 
 

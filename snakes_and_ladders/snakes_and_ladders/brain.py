@@ -40,6 +40,8 @@ class DemoNode(Node):
         self.received_dice_roll = False
         self.obj_arr_msg = ObjectArray()
         self.obj_arr_msg.objects = []
+        self.blue_obj_arr_msg = ObjectArray()
+        self.blue_obj_arr_msg.objects = []
         self.point_array = []
         self.seg_arr_msg = SegmentArray()
         self.seg_arr_msg.segments = []
@@ -62,12 +64,16 @@ class DemoNode(Node):
         self.down_snake = False
         self.up_ladders = False
         self.reset_pt = False
+        self.curr_player_pos = []
+        self.prev_player_pos = []
 
         self.pub_segs = self.create_publisher(SegmentArray, name + '/segment_array', 1)
         self.board_location = self.create_subscription(
             BoxArray, '/board_detector/box_array', self.recv_box_array, 1)
         self.sub_obj_array = self.create_subscription(
               ObjectArray, '/board_detector/object_array', self.recv_obj_array, 1)
+        self.sub_blue_obj_array = self.create_subscription(
+              ObjectArray, '/board_detector/blue_object_array', self.recv_blue_obj_array, 1)
         self.sub_state = self.create_subscription(
             State, '/trajectory/state', self.recv_state, 1)
         self.sub_check = self.create_subscription(
@@ -163,6 +169,18 @@ class DemoNode(Node):
         #     self.check_board = False
             #self.received_dice_roll = False
 
+    def recv_blue_obj_array(self, msg):
+        self.blue_obj_arr_msg.objects = []
+        for obj in msg.objects:
+            self.blue_obj_arr_msg.objects.append(obj)
+        for obj in self.blue_obj_arr_msg.objects:
+            if obj.type == Object.BLUE_DISK:
+                self.prev_player_pos = self.curr_player_pos
+                player_world_msg = Point()
+                player_world_msg.x = obj.x
+                player_world_msg.y = obj.y
+                player_world_msg.z = 0.012
+                self.curr_player_pos = [player_world_msg.x, player_world_msg.y, player_world_msg.z]
 
     def recv_obj_array(self, msg):
         if self.reset == True and self.obt_board_positions == True:
@@ -179,6 +197,15 @@ class DemoNode(Node):
                     disc_world_msg.y = obj.y
                     disc_world_msg.z = 0.012
                     self.point_array.append(disc_world_msg)
+                # elif obj.type == Object.BLUE_DISK:
+                #     self.prev_player_pos = self.curr_player_pos
+                #     player_world_msg = Point()
+                #     player_world_msg.x = obj.x
+                #     player_world_msg.y = obj.y
+                #     player_world_msg.z = 0.012
+                #     self.curr_player_pos = [player_world_msg.x, player_world_msg.y, player_world_msg.z]
+
+            #self.get_logger().info('Player point: %s' % (self.prev_player_pos))
 
             if len(self.point_array) > 0 and self.x_waiting != []:
                 cart_points = [self.x_waiting]
@@ -186,7 +213,6 @@ class DemoNode(Node):
                 for pt in self.point_array:
                     cart_points.append([pt.x, pt.y, pt.z + 0.10]) # PIECE POSITION
                     cart_points.append([pt.x, pt.y, pt.z]) # PIECE POSITION
-                    self.get_logger().info('Reset point: %s, %s, %s' % (self.board_positions[1][0], self.board_positions[1][1], pt.z))
                     if self.board_positions[1][1] < 0.25:
                         cart_points.append([0.497, 0.271, pt.z])
                     else:
@@ -239,6 +265,13 @@ class DemoNode(Node):
                     disc_world_msg.y = obj.y
                     disc_world_msg.z = 0.012
                     self.point_array.append(disc_world_msg)
+                # elif obj.type == Object.BLUE_DISK:
+                #     self.prev_player_pos = self.curr_player_pos
+                #     player_world_msg = Point()
+                #     player_world_msg.x = obj.x
+                #     player_world_msg.y = obj.y
+                #     player_world_msg.z = 0.012
+                #     self.curr_player_pos = [player_world_msg.x, player_world_msg.y, player_world_msg.z]
 
             if len(self.point_array) > 0 and self.x_waiting != []:
                 cart_points = [self.x_waiting]
@@ -259,10 +292,12 @@ class DemoNode(Node):
                         q_real = self.newton_raphson(initial_player_pos)
                     else:
                         self.reset_pt = False
-                        cart_points.append([self.board_positions[self.prev_position][0], 
-                                            self.board_positions[self.prev_position][1], pt.z + 0.10])
-                        cart_points.append([self.board_positions[self.prev_position][0], 
-                                            self.board_positions[self.prev_position][1], pt.z])
+                        #cart_points.append([self.board_positions[self.prev_position][0], 
+                                            #self.board_positions[self.prev_position][1], pt.z + 0.10])
+                        cart_points.append([pt.x, pt.y, pt.z + 0.10])
+                        cart_points.append([pt.x, pt.y, pt.z])
+                        #cart_points.append([self.board_positions[self.prev_position][0], 
+                                            #self.board_positions[self.prev_position][1], pt.z])
                         initial_player_pos_raise = cart_points[1]
                         initial_player_pos = cart_points[2]
                         q4 = self.newton_raphson(initial_player_pos_raise)
@@ -340,32 +375,34 @@ class DemoNode(Node):
                 self.get_logger().debug('this sucks')
             
 
-    def recv_dice_box_array(self, msg):
+    def recv_dice_box_array(self, msg):        
         if self.received_dice_roll == False and self.counter % 2 == 1 and self.num_pub_dice == 0:
-            self.get_logger().debug('Rolling dice')
-            self.dice_face_msg.box = []
-            for box in msg.box:
-                self.dice_face_msg.box.append(box)
-            
-            Tmove = CYCLE / 2
-            dice_rest_pos = [self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.04] # self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01
-            #dice_rest_pos = [1.338, 0.301, 0.04]
-            lifted_dice_pos = [self.dice_face_msg.box[0], self.dice_face_msg.box[1], 0.11]
-            #lifted_dice_pos = [1.338, 0.301, 0.11]
+            self.get_logger().debug('Stuck')
+            if (abs(self.curr_player_pos[0] - self.prev_player_pos[0]) > 0.05 or abs(self.curr_player_pos[1] - self.prev_player_pos[1]) > 0.05):
+                self.get_logger().debug('Rolling dice')
+                self.dice_face_msg.box = []
+                for box in msg.box:
+                    self.dice_face_msg.box.append(box)
+                
+                Tmove = CYCLE / 2
+                dice_rest_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.04] # self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01
+                #dice_rest_pos = [1.338, 0.301, 0.04]
+                lifted_dice_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.11]
+                #lifted_dice_pos = [1.338, 0.301, 0.11]
 
-            q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
-            q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
-            #q_dice_drop[3] = -np.pi/2
-            
-            self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2*Tmove, gripper_val=GRIPPER_INTERMEDIATE))  # going to dice
-            self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # gripping the dice
-            self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # lifting dice up
-            self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove))  # dropping the dice
-            self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))  # waiting 
+                q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
+                q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
+                #q_dice_drop[3] = -np.pi/2
+                
+                self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2*Tmove, gripper_val=GRIPPER_INTERMEDIATE))  # going to dice
+                self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # gripping the dice
+                self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # lifting dice up
+                self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove))  # dropping the dice
+                self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))  # waiting 
 
-            self.pub_segs.publish(self.seg_arr_msg)
-            self.num_pub_dice += 1
-            self.seg_arr_msg.segments = []
+                self.pub_segs.publish(self.seg_arr_msg)
+                self.num_pub_dice += 1
+                self.seg_arr_msg.segments = []
 
 
     def recv_box_array(self, msg):

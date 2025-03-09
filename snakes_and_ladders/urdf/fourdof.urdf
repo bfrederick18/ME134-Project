@@ -32,7 +32,7 @@
   <joint name="placement" type="fixed">
     <parent link="table"/>
     <child  link="baseplate"/>
-    <origin xyz="0.752 0.0 0.0" rpy="0 0 0"/>			<!-- BFRED 0.75 0 0 -->
+    <origin xyz="0.752 -0.01 0" rpy="0 0 0"/>			<!-- 0.752 0.0 0.0 BFRED 0.75 0 0 -->
   </joint>
 
   <!-- BASE PLATE: Shift across the base plate to the base motor. --> 
@@ -104,7 +104,7 @@
   <joint name="shoulder" type="continuous">
     <parent link="shouldermotor"/>
     <child  link="upperarm"/>
-    <origin xyz="0 0 0.0451" rpy="-3.14159 0 0"/>
+    <origin xyz="0 0 0.0401" rpy="-3.14159 0 0"/>   <!--- 0451 -->
     <axis   xyz="0 0 -1"/>
   </joint>
 
@@ -161,7 +161,7 @@
   <joint name="wrist_rot" type="fixed">
     <parent link="lowerarm"/>
     <child  link="wristmotor"/>
-    <origin xyz="0.325 0 0" rpy="0 0 -3.14159"/>		  <!-- 0.350 0  -0.01655 LOWER ARM DIMENIONS 0.00285 -->
+    <origin xyz="0.330 0 0" rpy="0 0 -3.14159"/>		  <!-- 0.325 0 0    0.350 0  -0.01655 LOWER ARM DIMENIONS 0.00285 -->
   </joint>
 
   <!-- Wrist motor.  Thickness: X5 = 31.1mm, X8 = 45.1mm -->
@@ -216,7 +216,7 @@
   <joint name="revolve" type="fixed">
     <parent link="gripper"/>
     <child  link="tip"/>
-    <origin xyz="0 0.127 0" rpy="0 0 0"/>		 <!-- 0.070 0.132 0.03 Lower L Bracket 0.025-0.010, 0.05-0.035 -->
+    <origin xyz="0 0.122 0" rpy="0 0 0"/>		 <!-- 0 0.127 0   0.070 0.132 0.03 Lower L Bracket 0.025-0.010, 0.05-0.035 -->
   </joint>
   
   <!-- TIP FRAME -->
