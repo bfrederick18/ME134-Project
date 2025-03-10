@@ -295,40 +295,44 @@ class DemoNode(Node):
 
                     if self.dice_roll is not None:
                         new_pos = self.position + self.dice_roll
-                        if new_pos in self.snakes:
-                            upd_pos = self.snakes[new_pos]
-                            self.down_snake = True
-                        elif new_pos in self.ladders:
-                            upd_pos = self.ladders[new_pos]
-                            self.up_ladders = True
-                        cart_points.append([self.board_positions[new_pos][0], self.board_positions[new_pos][1], pt.z])
-                        self.position = new_pos
-                        if self.reset_pt == True:
-                            final_player_pos = cart_points[4]
+                        if new_pos >= 100:
+                            self.get_logger().debug('R2-D2 WINS!!!! :)')
                         else:
-                            final_player_pos = cart_points[3]
-                        if self.down_snake == True or self.up_ladders == True:
-                            cart_points.append([self.board_positions[upd_pos][0], self.board_positions[upd_pos][1], pt.z])
+                            if new_pos in self.snakes:
+                                upd_pos = self.snakes[new_pos]
+                                self.down_snake = True
+                            elif new_pos in self.ladders:
+                                upd_pos = self.ladders[new_pos]
+                                self.up_ladders = True
+                            cart_points.append([self.board_positions[new_pos][0], self.board_positions[new_pos][1], pt.z])
+                            self.position = new_pos
                             if self.reset_pt == True:
-                                snake_player_pos = cart_points[5] #or ladder player position
+                                final_player_pos = cart_points[4]
                             else:
-                                snake_player_pos = cart_points[4] #or ladder player position
-                            self.position = upd_pos 
-                        self.get_logger().info('Position: %s' % self.position)
+                                final_player_pos = cart_points[3]
+                            if self.down_snake == True or self.up_ladders == True:
+                                cart_points.append([self.board_positions[upd_pos][0], self.board_positions[upd_pos][1], pt.z])
+                                if self.reset_pt == True:
+                                    snake_player_pos = cart_points[5] #or ladder player position
+                                else:
+                                    snake_player_pos = cart_points[4] #or ladder player position
+                                self.position = upd_pos 
+                            self.get_logger().info('Position: %s' % self.position)
                 self.point_array = [] 
                 Tmove = CYCLE / 2
 
-                self.seg_arr_msg.segments.append(create_seg(q4, t=2*Tmove))  # above player position
-                self.seg_arr_msg.segments.append(create_seg(q5, t=Tmove))  # moving to player position
-                self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
+                if new_pos < 100:
+                    self.seg_arr_msg.segments.append(create_seg(q4, t=2*Tmove))  # above player position
+                    self.seg_arr_msg.segments.append(create_seg(q5, t=Tmove))  # moving to player position
+                    self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
 
-                if self.reset_pt == True:
+                if self.reset_pt == True and new_pos < 100:
                     qTreal, qdotTreal = self.create_transitional(reset_point, initial_player_pos, Tmove)
                     self.seg_arr_msg.segments.append(create_seg(qTreal, v=qdotTreal, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))
                     self.seg_arr_msg.segments.append(create_seg(q_real, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))
                     self.reset_pt = False
 
-                if self.dice_roll is not None:
+                if self.dice_roll is not None and new_pos < 100:
 
                     qT, qdotT = self.create_transitional(initial_player_pos, final_player_pos, Tmove)
 
@@ -372,35 +376,39 @@ class DemoNode(Node):
                 else:
                     human_player = self.prev_human_player_pos + self.dice_roll
                 self.get_logger().debug('Human player position: %s' % human_player)
-                self.get_logger().debug('Player Position: (%s, %s)' % (self.curr_player_pos[0], self.curr_player_pos[1]))
-                if (abs(self.curr_player_pos[0] - self.board_positions[human_player][0]) > 0.04 or\
-                    abs(self.curr_player_pos[1] - self.board_positions[human_player][1]) > 0.04):
-                    self.get_logger().debug('CHEATING DETECTED!!!! RETURN PLAYER TO PROPER PLACE TO CONTINUE GAME')
+                #self.get_logger().debug('Player Position: (%s, %s)' % (self.curr_player_pos[0], self.curr_player_pos[1]))
+                if human_player >= 100:
+                    self.get_logger().debug('Human wins >:(')
+                    self.reset = True
                 else:
-                    self.get_logger().debug('Rolling dice')
-                    self.dice_face_msg.box = []
-                    for box in msg.box:
-                        self.dice_face_msg.box.append(box)
-                    self.human_player_pos = human_player
-                    Tmove = CYCLE / 2
-                    dice_rest_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.04] # self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01
-                    #dice_rest_pos = [1.338, 0.301, 0.04]
-                    lifted_dice_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.11]
-                    #lifted_dice_pos = [1.338, 0.301, 0.11]
+                    if (abs(self.curr_player_pos[0] - self.board_positions[human_player][0]) > 0.04 or\
+                        abs(self.curr_player_pos[1] - self.board_positions[human_player][1]) > 0.04):
+                        self.get_logger().debug('CHEATING DETECTED!!!! RETURN PLAYER TO PROPER PLACE TO CONTINUE GAME')
+                    else:
+                        self.get_logger().debug('Rolling dice')
+                        self.dice_face_msg.box = []
+                        for box in msg.box:
+                            self.dice_face_msg.box.append(box)
+                        self.human_player_pos = human_player
+                        Tmove = CYCLE / 2
+                        dice_rest_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.04] # self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01
+                        #dice_rest_pos = [1.338, 0.301, 0.04]
+                        lifted_dice_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.11]
+                        #lifted_dice_pos = [1.338, 0.301, 0.11]
 
-                    q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
-                    q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
-                    #q_dice_drop[3] = -np.pi/2
-                    
-                    self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2*Tmove, gripper_val=GRIPPER_INTERMEDIATE))  # going to dice
-                    self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # gripping the dice
-                    self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # lifting dice up
-                    self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove))  # dropping the dice
-                    self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))  # waiting 
+                        q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
+                        q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
+                        #q_dice_drop[3] = -np.pi/2
+                        
+                        self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2*Tmove, gripper_val=GRIPPER_INTERMEDIATE))  # going to dice
+                        self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # gripping the dice
+                        self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # lifting dice up
+                        self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove))  # dropping the dice
+                        self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))  # waiting 
 
-                    self.pub_segs.publish(self.seg_arr_msg)
-                    self.num_pub_dice += 1
-                    self.seg_arr_msg.segments = []
+                        self.pub_segs.publish(self.seg_arr_msg)
+                        self.num_pub_dice += 1
+                        self.seg_arr_msg.segments = []
 
 
     def recv_box_array(self, msg):

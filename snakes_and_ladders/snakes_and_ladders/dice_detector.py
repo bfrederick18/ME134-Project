@@ -10,7 +10,7 @@ from sensor_msgs.msg    import Image
 from geometry_msgs.msg  import Point
 from std_msgs.msg import Int16
 from project_msgs.msg import Num, BoxArray
-from snakes_and_ladders.constants import HSV_LIMITS_SIDECAM
+from snakes_and_ladders.constants import HSV_LIMITS_SIDECAM, HSV_LIMITS_PIP
         
 
 def average_list(list):
@@ -63,6 +63,7 @@ class DetectorNode(Node):
         self.pub_dice_dish_edge = self.create_publisher(Image, name + '/dice_dish_edge', 3)
         self.pub_dish_hsv = self.create_publisher(Image, name +'/dish_hsv', 3)
         self.pub_dish_binary = self.create_publisher(Image, name +'/dish_binary', 3)
+        self.pub_pip_binary = self.create_publisher(Image, name +'/pip_binary', 3)
         self.pub_roll = self.create_publisher(Int16, name + '/int16', 1)
         self.dice_roll_pub = self.create_publisher(Num, name + '/num', 1)
         self.pub_box_array = self.create_publisher(BoxArray, name + '/box_array', 1)
@@ -118,6 +119,7 @@ class DetectorNode(Node):
         # Detect the die face
         dice_face = self.detect_dice_face(frame)
         if dice_face is None:
+            self.get_logger().debug('this sucks')
             return None
         else:
             x, y, w, h = dice_face
@@ -139,44 +141,40 @@ class DetectorNode(Node):
             gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
 
             # Apply Gaussian blur
-            blurred = cv2.GaussianBlur(gray, (5, 5), 1)
+            # blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
             # Apply Hough Circle Transform
-            circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1, 3,
-                                    param1=25, param2=14, minRadius=3, maxRadius=7)  #1.0, 3, 25, 14, 4, 7
+            circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1.0, 3,
+                                    param1=25, param2=14, minRadius=4, maxRadius=7)  
             
             self.pub_dice_number_gray.publish(self.bridge.cv2_to_imgmsg(gray))
-            self.pub_dice_number_blurred.publish(self.bridge.cv2_to_imgmsg(blurred))
+            # self.pub_dice_number_blurred.publish(self.bridge.cv2_to_imgmsg(blurred))
 
             # Ensure at least some circles were found
             if circles is not None:
                 circles = np.round(circles[0, :]).astype("int")
                 # self.get_logger().info("Circle radiuses: %s" % circles)
-                
-                #pip_centers = [(cx, cy) for (cx, cy, r) in circles]
-                #pip_centers.sort(key=lambda p: p[1])
                 # Draw the circles
                 for (cx, cy, r) in circles:
                     cv2.circle(roi, (cx, cy), r, (0, 255, 0), 2)
                 
 
-                # if len(circles) == 5:
-                #     y_vals = [p[1] for p in pip_centers]
-                #     row_diff = np.diff(sorted(y_vals))
-                #     if len(set(row_diff)) <= 2:  # If y-values form two distinct rows
-                #         return 6
-                # #     center_x = np.mean([p[0] for p in pip_centers])
-                # #     center_y = np.mean([p[1] for p in pip_centers])
-                    
-                # #     distances = [((cx - center_x) ** 2 + (cy - center_y) ** 2) ** 0.5 for cx, cy in pip_centers]
-                    
-                # #     #If 4 points are at equal distance from the center, it's likely a cross
-                # #     if np.std(distances) < 10:  # Adjust threshold as needed
-                # #         return 5
-                #     else:
-                #         return 5
+                """if len(circles) == 5:
+                    #pip_detector_frame = frame.copy()
+                    hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+                    binary = cv2.inRange(hsv, HSV_LIMITS_PIP[:, 0], HSV_LIMITS_PIP[:, 1])
+                    iter = 2
+                    binary = cv2.erode(binary, None, iterations=iter)
+                    binary = cv2.dilate(binary, None, iterations=2*iter)
+                    binary = cv2.erode(binary, None, iterations=iter)
 
-                                    
+                    self.pub_pip_binary.publish(self.bridge.cv2_to_imgmsg(binary))
+                    cv2.circle(binary, (cx, cy), r, (0, 255, 0), 2)
+                    if len(circles) == None: 
+                        return 5
+                    else: 
+                        return 6"""
+            
                 self.pub_dice_number_roi.publish(self.bridge.cv2_to_imgmsg(roi, "rgb8"))
                 return len(circles)
             else:
