@@ -160,6 +160,7 @@ class DemoNode(Node):
 
     # Receive feedback - called repeatedly by incoming messages.
     def recvfbk(self, fbkmsg):
+        # self.get_logger().info("Received feedback: %r" % fbkmsg)
         self.actual_pos = fbkmsg.position
 
         state = State()
@@ -168,6 +169,8 @@ class DemoNode(Node):
         state.x_waiting_z = self.x_waiting[2]
 
         state.actual_pos = self.actual_pos
+        state.actual_vel = fbkmsg.velocity
+        state.actual_eff = fbkmsg.effort
 
         self.state_pub.publish(state)
 

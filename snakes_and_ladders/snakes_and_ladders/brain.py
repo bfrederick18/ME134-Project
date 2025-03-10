@@ -51,6 +51,8 @@ class DemoNode(Node):
         self.dice_face_msg.box = []
         self.x_waiting = []
         self.actual_pos = []
+        self.actual_vel = []
+        self.actual_eff = []
         self.board_positions = {}
         self.bridge = cv_bridge.CvBridge()
         self.counter = 0
@@ -97,7 +99,7 @@ class DemoNode(Node):
         J_dict = {
             'vertical': np.array([0, 1, -1, 1]).reshape(1,4),
             'dice_bowl': np.array([0, 1.5, 1, 1]).reshape(1,4),
-            'horizontal': np.array([0, 2.5, 1, 1]).reshape(1,4)  # not quite :(  I DONT KNOW HOW TO TUNE PLZ PAYAL HELP
+            'horizontal': np.array([0, 2.5, 1, 1]).reshape(1,4)
         }
 
         x_distance = []
@@ -116,15 +118,13 @@ class DemoNode(Node):
             q_step_size.append(np.linalg.norm(q_delta))
 
             if np.linalg.norm(x - x_goal) < 1e-12:
-                #self.get_logger().info("Completed in %d iterations" % i)
                 q_list = q.tolist()
                 q_list.append(0.0)
                 return q_list
-                # return q.tolist()
             
-        # return WAITING_POS[0:4]
         self.get_logger().info("Newton-Raphson failed to converge in %d iterations" % N)
         return WAITING_POS
+
 
     def create_transitional(self, initial_segment, final_segment, Tmove):
         transitional = [(initial_segment[0] + final_segment[0]) / 2, (initial_segment[1] + final_segment[1]) / 2, 0.09] 
@@ -140,13 +140,14 @@ class DemoNode(Node):
         qdotT = np.linalg.pinv(J) @ v_cart_stack
         qdotT = qdotT.flatten().tolist()
         qdotT.append(0.0)  # gripper
-
         return qT, qdotT
         
 
     def recv_state(self, msg):
         self.x_waiting = [msg.x_waiting_x, msg.x_waiting_y, msg.x_waiting_z]
         self.actual_pos = msg.actual_pos
+        self.actual_vel = msg.actual_vel
+        self.actual_eff = msg.actual_eff
     
 
     def recv_dice_roll(self,msg):
@@ -156,22 +157,22 @@ class DemoNode(Node):
 
     def recv_check(self, msg):
         self.waiting_msg = msg.num
+
         if self.waiting_msg == 1:
             self.check_board = True
             self.counter += 1
+
             if self.counter % 2 == 0:
                 self.received_dice_roll = True
                 self.num_pub_player = 0
             elif self.counter % 2 == 1:
                 self.received_dice_roll = False
                 self.num_pub_dice = 0
-            #self.get_logger().info('Counter: %s' % self.counter)
+
         elif self.waiting_msg == 2:
             self.check_board = True
             self.reset = True
-        # else:
-        #     self.check_board = False
-            #self.received_dice_roll = False
+
 
     def recv_blue_obj_array(self, msg):
         for obj in msg.objects:
@@ -185,6 +186,7 @@ class DemoNode(Node):
                 self.prev_player_pos = self.curr_player_pos
                 self.curr_player_pos = [player_world_msg.x, player_world_msg.y, player_world_msg.z]
                 self.blue_counter = 0
+
 
     def recv_obj_array(self, msg):
         if self.reset == True and self.obt_board_positions == True:
@@ -223,9 +225,8 @@ class DemoNode(Node):
                 q4 = self.newton_raphson(initial_player_pos_raise)
                 q5 = self.newton_raphson(initial_player_pos)
 
-                
                 self.seg_arr_msg.segments.append(create_seg(q4, t=2*Tmove))  # above player position
-                self.seg_arr_msg.segments.append(create_seg(q5))  # moving to player position
+                self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_INTERMEDIATE))  # moving to player position
                 self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
 
                 qT, qdotT = self.create_transitional(initial_player_pos, reset_player_pos, Tmove)
@@ -233,9 +234,10 @@ class DemoNode(Node):
 
                 self.seg_arr_msg.segments.append(create_seg(qT, v=qdotT, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
                 self.seg_arr_msg.segments.append(create_seg(q6, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # placing player position
-
                 self.seg_arr_msg.segments.append(create_seg(q6, t=Tmove))
                 self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))
+                self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=pi/4, gripper_val=GRIPPER_CLOSE_DICE))
+                self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=pi/4))
 
                 self.pub_segs.publish(self.seg_arr_msg)
                 self.num_pub_player += 1
@@ -266,6 +268,7 @@ class DemoNode(Node):
                 
                 for pt in self.point_array:
                     self.prev_position = self.position
+
                     if abs(self.board_positions[self.prev_position][0] - pt.x) >= 0.04 or abs(self.board_positions[self.prev_position][1] - pt.y) >= 0.04:
                         self.reset_pt = True
                         cart_points.append([pt.x, pt.y, pt.z + 0.10])
@@ -278,14 +281,11 @@ class DemoNode(Node):
                         q4 = self.newton_raphson(reset_point_raise)
                         q5 = self.newton_raphson(reset_point)
                         q_real = self.newton_raphson(initial_player_pos)
+
                     else:
                         self.reset_pt = False
-                        #cart_points.append([self.board_positions[self.prev_position][0], 
-                                            #self.board_positions[self.prev_position][1], pt.z + 0.10])
                         cart_points.append([pt.x, pt.y, pt.z + 0.10])
                         cart_points.append([pt.x, pt.y, pt.z])
-                        #cart_points.append([self.board_positions[self.prev_position][0], 
-                                            #self.board_positions[self.prev_position][1], pt.z])
                         initial_player_pos_raise = cart_points[1]
                         initial_player_pos = cart_points[2]
                         q4 = self.newton_raphson(initial_player_pos_raise)
@@ -294,33 +294,36 @@ class DemoNode(Node):
                     self.get_logger().info('Need to reset? %s' % self.reset_pt)
 
                     if self.dice_roll is not None:
-                        new_pos = self.position + self.dice_roll
-                        if new_pos >= 100:
-                            self.get_logger().debug('R2-D2 WINS!!!! :)')
-                            new_pos = 100
-
-                        if new_pos in self.snakes:
-                            upd_pos = self.snakes[new_pos]
-                            self.down_snake = True
-                        elif new_pos in self.ladders:
-                            upd_pos = self.ladders[new_pos]
-                            self.up_ladders = True
-
-                        cart_points.append([self.board_positions[new_pos][0], self.board_positions[new_pos][1], pt.z])
-                        self.position = new_pos
-
-                        if self.reset_pt == True:
-                            final_player_pos = cart_points[4]
+                        if self.position == 100:
+                            input("Hit return to restart game")
                         else:
-                            final_player_pos = cart_points[3]
+                            new_pos = self.position + self.dice_roll
+                            if new_pos >= 100:
+                                self.get_logger().debug('R2-D2 WINS!!!! :)')
+                                new_pos = 100
 
-                        if self.down_snake == True or self.up_ladders == True:
-                            cart_points.append([self.board_positions[upd_pos][0], self.board_positions[upd_pos][1], pt.z])
+                            if new_pos in self.snakes:
+                                upd_pos = self.snakes[new_pos]
+                                self.down_snake = True
+                            elif new_pos in self.ladders:
+                                upd_pos = self.ladders[new_pos]
+                                self.up_ladders = True
+
+                            cart_points.append([self.board_positions[new_pos][0], self.board_positions[new_pos][1], pt.z])
+                            self.position = new_pos
+
                             if self.reset_pt == True:
-                                snake_player_pos = cart_points[5] #or ladder player position
+                                final_player_pos = cart_points[4]
                             else:
-                                snake_player_pos = cart_points[4] #or ladder player position
-                            self.position = upd_pos 
+                                final_player_pos = cart_points[3]
+
+                            if self.down_snake == True or self.up_ladders == True:
+                                cart_points.append([self.board_positions[upd_pos][0], self.board_positions[upd_pos][1], pt.z])
+                                if self.reset_pt == True:
+                                    snake_player_pos = cart_points[5] #or ladder player position
+                                else:
+                                    snake_player_pos = cart_points[4] #or ladder player position
+                                self.position = upd_pos 
 
                         self.get_logger().info('Position: %s' % self.position)
                         
@@ -328,7 +331,7 @@ class DemoNode(Node):
                 Tmove = CYCLE / 2
 
                 self.seg_arr_msg.segments.append(create_seg(q4, t=2*Tmove))  # above player position
-                self.seg_arr_msg.segments.append(create_seg(q5, t=Tmove))  # moving to player position
+                self.seg_arr_msg.segments.append(create_seg(q5, t=Tmove, gripper_val=GRIPPER_INTERMEDIATE))  # moving to player position
                 self.seg_arr_msg.segments.append(create_seg(q5, gripper_val=GRIPPER_CLOSE_PURPLE))  # gripping player position
 
                 if self.reset_pt == True:
@@ -360,6 +363,8 @@ class DemoNode(Node):
                         self.up_ladders = False
 
                 self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))
+                self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=pi/4, gripper_val=GRIPPER_CLOSE_DICE))
+                self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=pi/4))
 
                 self.pub_segs.publish(self.seg_arr_msg)
                 self.num_pub_player += 1
@@ -381,6 +386,7 @@ class DemoNode(Node):
                 #self.get_logger().debug('Player Position: (%s, %s)' % (self.curr_player_pos[0], self.curr_player_pos[1]))
                 if human_player >= 100:
                     self.get_logger().debug('Human wins >:(')
+                    input("Hit return to restart game")
 
                 else:
                     if (abs(self.curr_player_pos[0] - self.board_positions[human_player][0]) > 0.04 or\
