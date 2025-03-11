@@ -148,11 +148,15 @@ class DemoNode(Node):
         self.actual_pos = msg.actual_pos
         self.actual_vel = msg.actual_vel
         self.actual_eff = msg.actual_eff
+        #self.get_logger().info('Effort: %s' % self.actual_eff)
+        
     
 
     def recv_dice_roll(self,msg):
         if msg.num is not None:
             self.dice_roll = msg.num
+        else:
+            self.get_logger().debug('Does not see dice')
 
 
     def recv_check(self, msg):
@@ -371,7 +375,7 @@ class DemoNode(Node):
 
                 self.seg_arr_msg.segments = []
             else:
-                self.get_logger().debug('this sucks')            
+                self.get_logger().debug('this sucks')    
 
     def recv_dice_box_array(self, msg):        
         if self.received_dice_roll == False and self.counter % 2 == 1 and self.num_pub_dice == 0:
