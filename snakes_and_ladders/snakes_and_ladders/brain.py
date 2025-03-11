@@ -371,8 +371,7 @@ class DemoNode(Node):
 
                 self.seg_arr_msg.segments = []
             else:
-                self.get_logger().debug('this sucks')
-            
+                self.get_logger().debug('this sucks')            
 
     def recv_dice_box_array(self, msg):        
         if self.received_dice_roll == False and self.counter % 2 == 1 and self.num_pub_dice == 0:
@@ -382,6 +381,10 @@ class DemoNode(Node):
                     human_player = 1
                 else:
                     human_player = self.prev_human_player_pos + self.dice_roll
+                if human_player in self.snakes:
+                    human_player = self.snakes[human_player]
+                elif human_player in self.ladders:
+                    human_player = self.ladders[human_player]
                 self.get_logger().debug('Human player position: %s' % human_player)
                 #self.get_logger().debug('Player Position: (%s, %s)' % (self.curr_player_pos[0], self.curr_player_pos[1]))
                 if human_player >= 100:
