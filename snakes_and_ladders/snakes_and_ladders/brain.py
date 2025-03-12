@@ -165,7 +165,7 @@ class DemoNode(Node):
         if self.waiting_msg == 1:
             self.check_board = True
             self.counter += 1
-
+            self.get_logger().info('Counter: %s' % self.counter)
             if self.counter % 2 == 0:
                 self.received_dice_roll = True
                 self.num_pub_player = 0
@@ -451,16 +451,26 @@ class DemoNode(Node):
                     y_pos_og = (y_mid - ((4 - row)*cell_height + cell_height/2)) 
                     x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
                     y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                    # if row == 0:
+                    #     cell_number = col + 1
+                    # elif row == 1:
+                    #     cell_number = 20 - col
+                    # elif row == 2:
+                    #     cell_number = 21 + col
+                    # elif row == 3:
+                    #     cell_number = 40 - col
+                    # elif row == 4:
+                    #     cell_number = 41 + col
                     if row == 0:
-                        cell_number = col + 1
+                        cell_number = 91 + col
                     elif row == 1:
-                        cell_number = 20 - col
+                        cell_number = 90 - col
                     elif row == 2:
-                        cell_number = 21 + col
+                        cell_number = 71 + col
                     elif row == 3:
-                        cell_number = 40 - col
+                        cell_number = 70 - col
                     elif row == 4:
-                        cell_number = 41 + col
+                        cell_number = 51 + col
                     self.board_positions[cell_number] = (x_pos, y_pos)
             
             for row in range(5):
@@ -469,16 +479,26 @@ class DemoNode(Node):
                     y_pos_og = y_mid - (4 - row) * cell_height - cell_height/2
                     x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
                     y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                    # if row == 0:
+                    #     cell_number = col + 1
+                    # elif row == 1:
+                    #     cell_number = 20 - col
+                    # elif row == 2:
+                    #     cell_number = 21 + col
+                    # elif row == 3:
+                    #     cell_number = 40 - col
+                    # elif row == 4:
+                    #     cell_number = 41 + col
                     if row == 0:
-                        cell_number = col + 1
+                        cell_number = 91 + col
                     elif row == 1:
-                        cell_number = 20 - col
+                        cell_number = 90 - col
                     elif row == 2:
-                        cell_number = 21 + col
+                        cell_number = 71 + col
                     elif row == 3:
-                        cell_number = 40 - col
+                        cell_number = 70 - col
                     elif row == 4:
-                        cell_number = 41 + col
+                        cell_number = 51 + col
                     self.board_positions[cell_number] = (x_pos, y_pos) #(x_pos + 0.022, y_pos - 0.02
             
             for row in range(5, 10):
@@ -487,16 +507,26 @@ class DemoNode(Node):
                     y_pos_og = y_mid + (row - 5) * cell_height + cell_height/2
                     x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
                     y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                    # if row == 5:
+                    #     cell_number = 60 - col 
+                    # elif row == 6:
+                    #     cell_number = 61 + col
+                    # elif row == 7:
+                    #     cell_number = 80 - col
+                    # elif row == 8:
+                    #     cell_number = 81 + col
+                    # elif row == 9:
+                    #     cell_number = 100 - col
                     if row == 5:
-                        cell_number = 60 - col 
+                        cell_number = 50 - col 
                     elif row == 6:
-                        cell_number = 61 + col
+                        cell_number = 31 + col
                     elif row == 7:
-                        cell_number = 80 - col
+                        cell_number = 30 - col
                     elif row == 8:
-                        cell_number = 81 + col
+                        cell_number = 11 + col
                     elif row == 9:
-                        cell_number = 100 - col
+                        cell_number = 10 - col
                     self.board_positions[cell_number] = (x_pos, y_pos) #x_pos + 0.022, y_pos
             
             for row in range(5, 10):
@@ -505,16 +535,26 @@ class DemoNode(Node):
                     y_pos_og = y_mid + ((row - 5) *cell_height + cell_height/2)
                     x_pos = (x_pos_og - x_mid)*np.cos(np.radians(angle)) + (y_pos_og - y_mid)*np.sin(np.radians(angle)) + x_mid
                     y_pos = -(x_pos_og - x_mid)*np.sin(np.radians(angle)) + (y_pos_og - y_mid)*np.cos(np.radians(angle)) + y_mid
+                    # if row == 5:
+                    #     cell_number = 60 - col 
+                    # elif row == 6:
+                    #     cell_number = 61 + col
+                    # elif row == 7:
+                    #     cell_number = 80 - col
+                    # elif row == 8:
+                    #     cell_number = 81 + col
+                    # elif row == 9:
+                    #     cell_number = 100 - col
                     if row == 5:
-                        cell_number = 60 - col 
+                        cell_number = 50 - col 
                     elif row == 6:
-                        cell_number = 61 + col
+                        cell_number = 31 + col
                     elif row == 7:
-                        cell_number = 80 - col
+                        cell_number = 30 - col
                     elif row == 8:
-                        cell_number = 81 + col
+                        cell_number = 11 + col
                     elif row == 9:
-                        cell_number = 100 - col
+                        cell_number = 10 - col
 
                     self.board_positions[cell_number] = (x_pos, y_pos)
 
