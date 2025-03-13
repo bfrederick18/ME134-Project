@@ -94,7 +94,7 @@ class DemoNode(Node):
 
         self.A = -3.85
         self.B = 0
-        self.C = -2.7
+        self.C = -2.9
         self.D = 0
 
         self.segments = []
@@ -287,7 +287,6 @@ class DemoNode(Node):
             #self.waiting_msg.num = 1
         
         self.waiting_pub.publish(self.waiting_msg)
-        
         tau = self.gravity(self.actual_pos)
         self.sendcmd(qd, qddot, tau)
 

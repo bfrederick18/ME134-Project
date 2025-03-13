@@ -258,6 +258,7 @@ class DetectorNode(Node):
             dish_point.x = (float)(dish_right_edge_center[0])
             dish_point.y = (float)(dish_right_edge_center[1])
             dish_point.z = 0.0
+            #self.get_logger().info('Rightedge: %s' % dish_point)
             self.pub_dish_location.publish(dish_point)
 
         self.player_detector(frame, HSV_LIMITS_PURPLE, Object.PURPLE_DISK)

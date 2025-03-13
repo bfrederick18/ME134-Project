@@ -69,7 +69,7 @@ class DetectorNode(Node):
     
 
     def recv_dish_location(self, msg):
-        self.dish_x = msg.x + 0.102
+        self.dish_x = msg.x + 0.065
         self.dish_y = msg.y
 
 
@@ -193,11 +193,26 @@ class DetectorNode(Node):
 
         
     def process(self, msg):
+        #self.get_logger().info('this sucks')
         assert(msg.encoding == 'rgb8')
         frame = self.bridge.imgmsg_to_cv2(msg, 'passthrough')
         self.box_array.box = []
+        # hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+        # (H, W, D) = frame.shape
+        # uc = W//2
+        # vc = H//2
+        # if True:
+        #     # Draw the center lines.  Note the row is the first dimension.
+        #     frame = cv2.line(frame, (uc,0), (uc,H-1), self.white, 1)
+        #     frame = cv2.line(frame, (0,vc), (W-1,vc), self.white, 1)
 
-        self.detect_dice_dish(frame)
+        #     # Report the center HSV values.  Note the row comes first.
+        #     self.get_logger().info(
+        #         "HSV = (%3d, %3d, %3d)" % tuple(hsv[vc, uc]))
+
+        dish = self.detect_dice_dish(frame)
+        if dish is None:
+            self.get_logger().info('Cant see dice dish')
         
         if type(self.M) is not np.ndarray:
             self.get_logger().debug('Calibration failed')
@@ -229,6 +244,8 @@ class DetectorNode(Node):
             self.box_array.box = [float(dice_center_x), float(dice_center_y)]
             self.pub_box_array.publish(self.box_array)
             self.get_logger().info('Dice Location: %s, %s' % (dice_center_x, dice_center_y))
+        else:
+            self.get_logger().info('NO DIE DETECTED!!!')
 
         self.pubrgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
 
