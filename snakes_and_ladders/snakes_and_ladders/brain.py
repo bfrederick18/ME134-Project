@@ -163,9 +163,10 @@ class DemoNode(Node):
         self.waiting_msg = msg.num
 
         if self.waiting_msg == 1:
+            self.obt_board_positions = False
             self.check_board = True
             self.counter += 1
-            self.get_logger().info('Counter: %s' % self.counter)
+            #self.get_logger().info('Counter: %s' % self.counter)
             if self.counter % 2 == 0:
                 self.received_dice_roll = True
                 self.num_pub_player = 0
@@ -372,6 +373,7 @@ class DemoNode(Node):
 
                 self.pub_segs.publish(self.seg_arr_msg)
                 self.num_pub_player += 1
+                self.check_board = False
 
                 self.seg_arr_msg.segments = []
             else:
@@ -379,6 +381,7 @@ class DemoNode(Node):
 
     def recv_dice_box_array(self, msg):        
         if self.received_dice_roll == False and self.counter % 2 == 1 and self.num_pub_dice == 0:
+            self.get_logger().info('Board Position 50: %s' % str(self.board_positions[50]))
             if (abs(self.curr_player_pos[0] - self.prev_player_pos[0]) > 0.01 or abs(self.curr_player_pos[1] - self.prev_player_pos[1]) > 0.01):
                 self.prev_human_player_pos = self.human_player_pos
                 if self.human_player_pos == 0:
@@ -394,12 +397,12 @@ class DemoNode(Node):
                 if human_player >= 100:
                     self.get_logger().debug('Human wins >:(')
                     input("Hit return to restart game")
-
                 else:
                     if (abs(self.curr_player_pos[0] - self.board_positions[human_player][0]) > 0.04 or\
-                        abs(self.curr_player_pos[1] - self.board_positions[human_player][1]) > 0.04):
+                        abs(self.curr_player_pos[1] - self.board_positions[human_player][1]) > 0.04) and\
+                            self.check_board == True:
                         self.get_logger().debug('CHEATING DETECTED!!!! RETURN PLAYER TO PROPER PLACE TO CONTINUE GAME')
-                    else:
+                    elif self.check_board == True:
                         self.get_logger().debug('Rolling dice')
                         self.dice_face_msg.box = []
                         for box in msg.box:
@@ -423,6 +426,7 @@ class DemoNode(Node):
 
                         self.pub_segs.publish(self.seg_arr_msg)
                         self.num_pub_dice += 1
+                        self.check_board = False
                         self.seg_arr_msg.segments = []
 
 
@@ -573,7 +577,6 @@ class DemoNode(Node):
             }
             if len(self.board_positions) != 0:
                 self.obt_board_positions = True
-                self.check_board = False
         else:
             self.board_positions = self.board_positions
 
