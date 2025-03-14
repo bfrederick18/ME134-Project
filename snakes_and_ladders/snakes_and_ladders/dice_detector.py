@@ -39,11 +39,13 @@ class DetectorNode(Node):
 
         self.M = None
         self.M2 = None
+        self.dice_hidden = False
         self.initial_positions = {}
         self.dice_roll_rounded = 0
         self.dice_roll = Num()
         self.box_array = BoxArray()
         self.bridge = cv_bridge.CvBridge()
+        self.dice_roll_hidden = Num()
 
         self.pubrgb = self.create_publisher(Image, name +'/image_raw', 3)
         self.pub_dice_face_gray = self.create_publisher(Image, name + '/dice_face_gray', 3)
@@ -228,15 +230,18 @@ class DetectorNode(Node):
             avg_reading = sum(self.die_rolls) / len(self.die_rolls)
             round_read = math.ceil(avg_reading)
             self.dice_roll_rounded = round_read
+
+            self.dice_roll.num = self.dice_roll_rounded
+            self.get_logger().info('Dice Reading: %s' % self.dice_roll_rounded)
+            self.dice_roll_pub.publish(self.dice_roll)
         else:
             self.get_logger().info('NO DIE DETECTED!!!')
             self.die_rolls = []
+            self.dice_hidden = True
+            self.dice_roll_hidden.num = 0
+            self.dice_roll_pub.publish(self.dice_roll_hidden)
 
         dice_frame = self.detect_dice_face(frame)
-
-        self.dice_roll.num = self.dice_roll_rounded
-        self.get_logger().info('Dice Reading: %s' % self.dice_roll_rounded)
-        self.dice_roll_pub.publish(self.dice_roll)
 
         if dice_frame is not None:
             x, y, _, _ = dice_frame
