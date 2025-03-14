@@ -141,6 +141,23 @@ class DemoNode(Node):
         qdotT = qdotT.flatten().tolist()
         qdotT.append(0.0)  # gripper
         return qT, qdotT
+    
+    def create_transitional_modified(self, initial_segment, Tmove):
+        transitional = [initial_segment[0], initial_segment[1], 0.09] 
+        qT = self.newton_raphson(transitional, J_dict_val='vertical')
+
+        dx = (transitional[0] - initial_segment[0])
+        dy = (transitional[1] - initial_segment[1])
+        dz = (transitional[2] - initial_segment[2])
+        v_cart = np.array([dx / Tmove, dy / Tmove, dz / Tmove])
+
+        (_, _, Jv, _) = self.chain.fkin(qT[0:4])
+        J = np.vstack([Jv, np.array([0, 1, -1, 1]).reshape(1,4)])
+        v_cart_stack = np.vstack([np.array(v_cart).reshape(3,1), np.array([0]).reshape(1,1)])
+        qdotT = np.linalg.pinv(J) @ v_cart_stack
+        qdotT = qdotT.flatten().tolist()
+        qdotT.append(0.0)  # gripper
+        return qT, qdotT
         
 
     def recv_state(self, msg):
@@ -166,7 +183,7 @@ class DemoNode(Node):
             self.obt_board_positions = False
             self.check_board = True
             self.counter += 1
-            #self.get_logger().info('Counter: %s' % self.counter)
+            self.get_logger().info('Counter: %s' % self.counter)
             if self.counter % 2 == 0:
                 self.received_dice_roll = True
                 self.num_pub_player = 0
@@ -346,10 +363,14 @@ class DemoNode(Node):
                     self.reset_pt = False
 
                 if self.dice_roll is not None:
-                    qT, qdotT = self.create_transitional(initial_player_pos, final_player_pos, Tmove)
+                    #qT, qdotT = self.create_transitional(initial_player_pos, final_player_pos, Tmove)
+                    qT_raise, qdotT_raise = self.create_transitional_modified(initial_player_pos, Tmove)
+                    qT_lower, qdotT_lower = self.create_transitional_modified(final_player_pos, Tmove)
                     q6 = self.newton_raphson(final_player_pos)
                     
-                    self.seg_arr_msg.segments.append(create_seg(qT, v=qdotT, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
+                    #self.seg_arr_msg.segments.append(create_seg(qT, v=qdotT, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
+                    self.seg_arr_msg.segments.append(create_seg(qT_raise, v=qdotT_raise, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
+                    self.seg_arr_msg.segments.append(create_seg(qT_lower, v=qdotT_lower, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
                     self.seg_arr_msg.segments.append(create_seg(q6, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # placing player position
 
                     if self.down_snake == False and self.up_ladders == False:
@@ -357,10 +378,15 @@ class DemoNode(Node):
 
                     if self.down_snake == True or self.up_ladders == True:
 
-                        qT2, qdotT2 = self.create_transitional(final_player_pos, snake_player_pos, Tmove)
+                        #qT2, qdotT2 = self.create_transitional(final_player_pos, snake_player_pos, Tmove)
+                        qT2_raise, qdotT2_raise = self.create_transitional_modified(final_player_pos, Tmove)
+                        qT2_lower, qdotT2_lower = self.create_transitional_modified(snake_player_pos, Tmove)
                         q7 = self.newton_raphson(snake_player_pos)
+                        
 
-                        self.seg_arr_msg.segments.append(create_seg(qT2, v=qdotT2, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
+                        #self.seg_arr_msg.segments.append(create_seg(qT2, v=qdotT2, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
+                        self.seg_arr_msg.segments.append(create_seg(qT2_raise, v=qdotT2_raise, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
+                        self.seg_arr_msg.segments.append(create_seg(qT2_lower, v=qdotT2_lower, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # moving player position
                         self.seg_arr_msg.segments.append(create_seg(q7, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # placing player position
                         self.seg_arr_msg.segments.append(create_seg(q7, t=Tmove))
 
