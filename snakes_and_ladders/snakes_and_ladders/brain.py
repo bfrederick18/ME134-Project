@@ -72,6 +72,7 @@ class DemoNode(Node):
         self.human_player_pos = 0
         self.prev_human_player_pos = 0
         self.dice_hidden = False
+        self.dice_hidden_counter = 0
 
         self.pub_segs = self.create_publisher(SegmentArray, name + '/segment_array', 1)
         self.board_location = self.create_subscription(
@@ -128,7 +129,7 @@ class DemoNode(Node):
 
 
     def create_transitional(self, initial_segment, final_segment, Tmove):
-        transitional = [(initial_segment[0] + final_segment[0]) / 2, (initial_segment[1] + final_segment[1]) / 2, 0.09] 
+        transitional = [(initial_segment[0] + final_segment[0]) / 2, (initial_segment[1] + final_segment[1]) / 2, 0.10] 
         qT = self.newton_raphson(transitional, J_dict_val='vertical')
 
         dx = (transitional[0] - initial_segment[0])
@@ -174,7 +175,10 @@ class DemoNode(Node):
         if msg.num is not None:
             self.dice_roll = msg.num
             if msg.num == 0:
+                self.dice_hidden_counter += 1
+            if self.dice_hidden_counter == 10:
                 self.dice_hidden = True
+                self.dice_hidden_counter = 0
 
     def recv_check(self, msg):
         self.waiting_msg = msg.num
@@ -194,6 +198,12 @@ class DemoNode(Node):
         elif self.waiting_msg == 2:
             self.check_board = True
             self.reset = True
+        
+        # elif self.waiting_msg is None and self.received_dice_roll == True and self.num_pub_player == 0:
+        #     self.counter += 1
+
+        # elif self.waiting_msg is None and self.received_dice_roll == False and self.num_pub_player == 0:
+        #     self.counter += 1
 
 
     def recv_blue_obj_array(self, msg):
@@ -400,6 +410,7 @@ class DemoNode(Node):
                 self.pub_segs.publish(self.seg_arr_msg)
                 self.num_pub_player += 1
                 self.check_board = False
+                self.dice_hidden = False
 
                 self.seg_arr_msg.segments = []
             else:
@@ -442,6 +453,7 @@ class DemoNode(Node):
                     self.num_pub_dice += 1
                     self.check_board = False
                     self.seg_arr_msg.segments = []
+                    self.dice_hidden = False
             elif (abs(self.curr_player_pos[0] - self.prev_player_pos[0]) > 0.01 or abs(self.curr_player_pos[1] - self.prev_player_pos[1]) > 0.01)\
                 and self.human_player_pos != 0 and self.dice_hidden == True:
                 self.prev_human_player_pos = self.human_player_pos
@@ -499,7 +511,7 @@ class DemoNode(Node):
             for box in msg.box:
                 self.box_arr_msg.box.append(box)
                 
-            w = 0.508
+            w = 0.507 #.508
             h = 0.514
             # Calculate cell width & height (assuming a 10x10 board)
             cell_width = w / 10
@@ -627,16 +639,24 @@ class DemoNode(Node):
             # self.get_logger().info('Board Positions: %s' % self.board_positions)
 
             # Define ladders manually (start → end)
+            # self.ladders = {
+            #     8: 27, 21: 41, 32: 51, 54: 66, 70: 89,
+            #     77: 98
+            # }
             self.ladders = {
-                8: 27, 21: 41, 32: 51, 54: 66, 70: 89,
-                77: 98
+                2: 19, 8: 27, 16: 37, 21: 41, 32: 51, 47: 68, 55: 66, 70: 89,
+                86: 95, 78: 99
             }
-
             # Define snakes manually (start → end)
+            # self.snakes = {
+            #     15: 4, 29: 12, 46: 18, 68: 49, 79: 57,
+            #     95: 74
+            # }
             self.snakes = {
-                15: 4, 29: 12, 46: 18, 68: 49, 79: 57,
-                95: 74
+                15: 4, 29: 12, 46: 18, 33: 26, 59: 38, 69: 50, 79: 57,
+                87: 66, 92: 71, 98: 77
             }
+            
             if len(self.board_positions) != 0:
                 self.obt_board_positions = True
         else:
