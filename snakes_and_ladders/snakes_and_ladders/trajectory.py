@@ -110,7 +110,7 @@ class DemoNode(Node):
         self.state_pub = self.create_publisher(State, name + '/state', 10)
 
         self.waiting_msg = Num()
-        self.waiting_pub = self.create_publisher(Num, name + '/num', 1)
+        self.waiting_pub = self.create_publisher(Num, name + '/num', 2)
 
         self.sub_seg_array = self.create_subscription(
             SegmentArray, '/brain/segment_array', self.recv_segment_array, 1)
