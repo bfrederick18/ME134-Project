@@ -83,7 +83,7 @@ class DetectorNode(Node):
 
         rotated_rectangle = cv2.minAreaRect(board_contour)
         ((um, vm), (wm,  hm), angle) = cv2.minAreaRect(board_contour)
-        
+        area = cv2.contourArea(board_contour)
         box = np.int0(cv2.boxPoints(rotated_rectangle))
         cv2.drawContours(frame, [box], 0, (0, 255, 0), 2)
 
@@ -96,7 +96,9 @@ class DetectorNode(Node):
         elif angle <= 90.0 and angle >= 45.0:
             angle = angle - 90
         
-        self.get_logger().info('Angle: %s' % angle)
+        #self.get_logger().info('Angle: %s' % angle)
+        #self.get_logger().info('Area: %s' % area)
+        self.get_logger().info('Width, Height: %s, %s' % (str(wm), str(hm))) # ~239 W, ~242 H
             
         return(um, vm, wm, hm, angle)   
     

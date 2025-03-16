@@ -458,6 +458,8 @@ class DemoNode(Node):
                     self.seg_arr_msg.segments.append(create_seg(qfinal, t=Tmove, gripper_val=GRIPPER_CLOSE_PURPLE))  # placing player position
                     self.seg_arr_msg.segments.append(create_seg(qfinal, t=Tmove))
                     self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))
+                    self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=pi/4, gripper_val=GRIPPER_CLOSE_DICE))
+                    self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=pi/4))
                     self.pub_segs.publish(self.seg_arr_msg)
                     self.seg_arr_msg.segments = []
                     self.num_pub_player += 1
