@@ -336,7 +336,11 @@ class DemoNode(Node):
 
                     if self.dice_roll is not None:
                         if self.position == 100:
-                            input("Hit return to restart game")
+                            self.human_player_pos = 0
+                            self.counter = 0
+                            self.check_board = True
+                            self.reset = True
+                            return
                         else:
                             new_pos = self.position + self.dice_roll
                             if new_pos >= 100:
@@ -430,7 +434,7 @@ class DemoNode(Node):
     def recv_dice_box_array(self, msg):        
         if self.received_dice_roll == False and self.counter % 2 == 1 and self.num_pub_dice == 0:
             #self.get_logger().info('Dice Roll Hidden or Not: %s' % str(self.dice_hidden))
-            if self.position != 1:
+            if self.position != 1 and self.position != 100:
                 if (abs(self.purple_disk_coords[0] - self.board_positions[self.position][0]) > 0.03\
                     or abs(self.purple_disk_coords[1] - self.board_positions[self.position][1]) > 0.03)\
                         and self.check_board == True and self.recover_purple == 0:
@@ -558,6 +562,28 @@ class DemoNode(Node):
                         and self.human_player_pos !=0 and self.dice_hidden == False:
                         self.get_logger().debug('ROLL DICE TO CONTINUE GAME!!!')
                         self.recover_purple += 1
+            elif self.position == 100:
+                self.get_logger().debug('You LOSE :)!!')
+                qdance = [1.13, 0.0, -pi/2, 0.0, 0.0]
+                qT = [0.0, 0.0, -pi/2, 0.0, 0.0]
+                qdance2 = [-1.2, 0.0, -pi/2, 0.0, 0.0]
+                Tmove = CYCLE/2
+                self.seg_arr_msg.segments.append(create_seg(qdance, t=Tmove))
+                self.seg_arr_msg.segments.append(create_seg(qdance, t=Tmove/2, gripper_val=GRIPPER_CLOSE_DICE))
+                self.seg_arr_msg.segments.append(create_seg(qdance2, t=Tmove))
+                self.seg_arr_msg.segments.append(create_seg(qdance2, t=Tmove/2, gripper_val=GRIPPER_CLOSE_DICE))
+                self.seg_arr_msg.segments.append(create_seg(qdance, t=Tmove))
+                self.seg_arr_msg.segments.append(create_seg(qdance, t=Tmove/2, gripper_val=GRIPPER_CLOSE_DICE))
+                self.seg_arr_msg.segments.append(create_seg(qdance2, t=Tmove))
+                self.seg_arr_msg.segments.append(create_seg(qdance2, t=Tmove/2, gripper_val=GRIPPER_CLOSE_DICE))
+                self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=Tmove/2))
+                self.pub_segs.publish(self.seg_arr_msg)
+                self.seg_arr_msg.segments = []
+                self.num_pub_dice += 1
+                self.received_dice_roll = True
+                self.check_board = False
+                self.dice_hidden = False
+                self.recover_purple += 1
             else:
                 if (abs(self.curr_player_pos[0] - self.prev_player_pos[0]) > 0.01 or abs(self.curr_player_pos[1] - self.prev_player_pos[1]) > 0.01)\
                         and self.human_player_pos == 0:
