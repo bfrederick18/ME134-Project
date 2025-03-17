@@ -246,9 +246,15 @@ class DetectorNode(Node):
         if dice_frame is not None:
             x, y, _, _ = dice_frame
             dice_center_x, dice_center_y = self.pixelToWorld(int(x), int(y), self.M)
-            self.box_array.box = [float(dice_center_x), float(dice_center_y)]
-            self.pub_box_array.publish(self.box_array)
-            self.get_logger().info('Dice Location: %s, %s' % (dice_center_x, dice_center_y))
+            if (dice_center_y <= 0.27 or dice_center_y >= 0.35) or (dice_center_x >= 1.39 or dice_center_x <= 1.31):
+                self.box_array.box = [float(1.355), float(0.317)]
+                self.pub_box_array.publish(self.box_array)
+                self.get_logger().info('Dice Location: %s, %s' % (dice_center_x, dice_center_y))
+            else:
+                self.box_array.box = [float(dice_center_x), float(dice_center_y)]
+                self.pub_box_array.publish(self.box_array)
+                self.get_logger().info('Dice Location: %s, %s' % (dice_center_x, dice_center_y))
+                
         else:
             self.get_logger().info('NO DIE DETECTED!!!')
 

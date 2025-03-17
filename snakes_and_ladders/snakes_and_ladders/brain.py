@@ -72,6 +72,7 @@ class DemoNode(Node):
         self.human_player_pos = 0
         self.prev_human_player_pos = 0
         self.dice_hidden = False
+        self.reach = True
         self.dice_hidden_counter = 0
         self.recover_purple = 0
         self.purple_disk_coords = []
@@ -228,9 +229,14 @@ class DemoNode(Node):
                 disc_world_msg.x = obj.x
                 disc_world_msg.y = obj.y
                 disc_world_msg.z = 0.012
-                self.purple_disk_coords = [obj.x, obj.y, 0.012]
+                if (obj.x <= 0.25 or obj.x >= 1.30) or (obj.y <= 0.19 or obj.y >= 0.75):
+                    self.get_logger().debug('Unable to reach piece. Please help R2-D2')
+                    self.reach = False
+                else:
+                    self.purple_disk_coords = [obj.x, obj.y, 0.012]
+                    self.reach = True
 
-        if self.reset == True and self.obt_board_positions == True:
+        if self.reset == True and self.obt_board_positions == True and self.reach == True:
             self.get_logger().debug('resetting player position')
             # self.obj_arr_msg.objects = []
             # for obj in msg.objects:
@@ -289,7 +295,7 @@ class DemoNode(Node):
 
                 self.reset = False
             
-        elif self.received_dice_roll == True and self.counter % 2 == 0 and self.num_pub_player == 0:
+        elif self.received_dice_roll == True and self.counter % 2 == 0 and self.num_pub_player == 0 and self.reach == True:
             self.get_logger().debug('going to player')
             self.obj_arr_msg.objects = []
 
@@ -432,7 +438,7 @@ class DemoNode(Node):
                 self.get_logger().debug('this sucks')    
 
     def recv_dice_box_array(self, msg):        
-        if self.received_dice_roll == False and self.counter % 2 == 1 and self.num_pub_dice == 0:
+        if self.received_dice_roll == False and self.counter % 2 == 1 and self.num_pub_dice == 0 and self.reach == True:
             #self.get_logger().info('Dice Roll Hidden or Not: %s' % str(self.dice_hidden))
             if self.position != 1 and self.position != 100:
                 if (abs(self.purple_disk_coords[0] - self.board_positions[self.position][0]) > 0.03\
@@ -621,61 +627,6 @@ class DemoNode(Node):
                             self.seg_arr_msg.segments = []
                             self.dice_hidden = False
                             self.received_dice_roll = True
-                        # elif (abs(self.curr_player_pos[0] - self.prev_player_pos[0]) > 0.01 or abs(self.curr_player_pos[1] - self.prev_player_pos[1]) > 0.01)\
-                        #     and self.human_player_pos != 0 and self.dice_hidden == True:
-                        #     self.prev_human_player_pos = self.human_player_pos
-                        #     human_player = self.prev_human_player_pos + self.dice_roll
-                        #     if human_player in self.snakes:
-                        #         human_player = self.snakes[human_player]
-                        #     elif human_player in self.ladders:
-                        #         human_player = self.ladders[human_player]
-                        #     #self.get_logger().debug('Player Position: (%s, %s)' % (self.curr_player_pos[0], self.curr_player_pos[1]))
-                        #     if human_player >= 100:
-                        #         human_player = 100
-                        #         self.get_logger().debug('Human player position: %s' % human_player)
-                        #         self.get_logger().debug('Human wins >:(')
-                        #         self.human_player_pos = 0
-                        #         self.counter = 0
-                        #         self.check_board = True
-                        #         self.reset = True
-                        #         return
-                        #     else:
-                        #         self.get_logger().debug('Human player position: %s' % human_player)
-                        #         if (abs(self.curr_player_pos[0] - self.board_positions[human_player][0]) > 0.04 or\
-                        #             abs(self.curr_player_pos[1] - self.board_positions[human_player][1]) > 0.04) and\
-                        #                 self.check_board == True:
-                        #             self.get_logger().debug('CHEATING DETECTED!!!! RETURN PLAYER TO PROPER PLACE TO CONTINUE GAME')
-                        #         elif self.check_board == True:
-                        #             self.get_logger().debug('Rolling dice')
-                        #             self.dice_face_msg.box = []
-                        #             for box in msg.box:
-                        #                 self.dice_face_msg.box.append(box)
-                        #             self.human_player_pos = human_player
-                        #             Tmove = CYCLE / 2
-                        #             dice_rest_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.04] # self.dice_face_msg.box[0] + 0.025, self.dice_face_msg.box[1] - 0.01
-                        #             #dice_rest_pos = [1.338, 0.301, 0.04]
-                        #             lifted_dice_pos = [self.dice_face_msg.box[0] + 0.02, self.dice_face_msg.box[1], 0.11]
-                        #             #lifted_dice_pos = [1.338, 0.301, 0.11]
-
-                        #             q_dice_grip = self.newton_raphson(dice_rest_pos, J_dict_val='dice_bowl')
-                        #             q_dice_drop = self.newton_raphson(lifted_dice_pos, J_dict_val='horizontal')
-                        #             #q_dice_drop[3] = -np.pi/2
-                                    
-                        #             self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=2*Tmove, gripper_val=GRIPPER_INTERMEDIATE))  # going to dice
-                        #             self.seg_arr_msg.segments.append(create_seg(q_dice_grip, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # gripping the dice
-                        #             self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove, gripper_val=GRIPPER_CLOSE_DICE))  # lifting dice up
-                        #             self.seg_arr_msg.segments.append(create_seg(q_dice_drop, t=Tmove))  # dropping the dice
-                        #             self.seg_arr_msg.segments.append(create_seg(WAITING_POS, t=2*Tmove))  # waiting 
-
-                        #             self.pub_segs.publish(self.seg_arr_msg)
-                        #             self.num_pub_dice += 1
-                        #             self.check_board = False
-                        #             self.seg_arr_msg.segments = []
-                        #             self.dice_hidden = False
-                        #             self.received_dice_roll = True
-                        # elif (abs(self.curr_player_pos[0] - self.prev_player_pos[0]) > 0.01 or abs(self.curr_player_pos[1] - self.prev_player_pos[1]) > 0.01)\
-                        #     and self.human_player_pos !=0 and self.dice_hidden == False:
-                        #     self.get_logger().debug('ROLL DICE TO CONTINUE GAME!!!')
 
 
     def recv_box_array(self, msg):
@@ -778,7 +729,7 @@ class DemoNode(Node):
             #     77: 98
             # }
             self.ladders = {
-                2: 19, 8: 27, 16: 37, 21: 41, 32: 51, 47: 68, 55: 66, 70: 89,
+                2: 19, 8: 27, 16: 37, 21: 41, 32: 51, 47: 68, 55: 65, 70: 89,
                 86: 95, 78: 99
             }
             # Define snakes manually (start → end)
