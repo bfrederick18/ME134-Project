@@ -98,7 +98,7 @@ class DetectorNode(Node):
         
         #self.get_logger().info('Angle: %s' % angle)
         #self.get_logger().info('Area: %s' % area)
-        self.get_logger().info('Width, Height: %s, %s' % (str(wm), str(hm))) # ~239 W, ~242 H
+        #self.get_logger().info('Width, Height: %s, %s' % (str(wm), str(hm))) # ~239 W, ~242 H
             
         return(um, vm, wm, hm, angle)   
     
@@ -185,7 +185,7 @@ class DetectorNode(Node):
     
 
     def player_detector(self, frame, hsv_limits, object_type):
-        self.get_logger().info('Detecting %s' % object_type)
+        #self.get_logger().info('Detecting %s' % object_type)
         hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
         binary = cv2.inRange(hsv, hsv_limits[:, 0], hsv_limits[:, 1])
 
@@ -275,7 +275,12 @@ class DetectorNode(Node):
         self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(frame, 'rgb8'))
         self.pub_obj_array.publish(self.object_array)
         self.pub_blue_obj_array.publish(self.blue_object_array)
-        self.pub_box_array.publish(self.box_array)
+        if (wm < 245 and wm > 230) and (hm < 250 and hm > 230):
+            self.get_logger().info('Full board contour seen')
+            self.pub_box_array.publish(self.box_array)
+        else:
+            self.get_logger().info('Warning!!! Full board contour not seen')
+            pass
 
 
 def main(args=None):
